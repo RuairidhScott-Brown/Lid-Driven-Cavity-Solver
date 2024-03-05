@@ -9,8 +9,8 @@ using namespace std;
 
 #define IDX(I,J) ((J)*Nx + (I))
 
-#include "LidDrivenCavity.h"
-#include "SolverCG.h"
+#include "../include/LidDrivenCavity.h"
+#include "../include/SolverCG.h"
 
 LidDrivenCavity::LidDrivenCavity()
 {

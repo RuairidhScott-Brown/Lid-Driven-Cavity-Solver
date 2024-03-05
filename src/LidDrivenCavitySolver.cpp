@@ -4,7 +4,7 @@ using namespace std;
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
-#include "LidDrivenCavity.h"
+#include "../include/LidDrivenCavity.h"
 
 int main(int argc, char **argv)
 {

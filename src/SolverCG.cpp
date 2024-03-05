@@ -5,7 +5,7 @@ using namespace std;
 
 #include <cblas.h>
 
-#include "SolverCG.h"
+#include "../include/SolverCG.h"
 
 #define IDX(I,J) ((J)*Nx + (I))
 
