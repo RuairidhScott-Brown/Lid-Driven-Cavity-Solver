@@ -1,29 +1,71 @@
-default: solver
+# Compiler
+CXX := g++
+CC := g++
 
-CXX = g++
-CC = g++
-CXXFLAGS = -std=c++11 -Wall -O3
-SRC_DIR = src
-INCLUDE_DIR = include
-BUILD_DIR = build
-DOC_DIR = doc
-TESTS_DIR = unittests
-LDLIBS   = -lblas -lboost_program_options
+# Compiler flags
+CXXFLAGS := -std=c++11 -Wall -O3
+TEST_CXXFLAGS := -std=c++11 -Wall
 
-build/SolverCG.o: src/SolverCG.cpp include/SolverCG.h
-	$(CXX) $(CXXFLAGS) -o $@ -c $< $(LDLIBS)
+# Directories
+SRC_DIR := src
+INCLUDE_DIR := include
+BUILD_DIR := build
+DOC_DIR := doc
+TESTS_DIR := tests
+BIN_DIR := bin
 
-build/LidDrivenCavitySolver.o: src/LidDrivenCavitySolver.cpp include/LidDrivenCavity.h
-	$(CXX) $(CXXFLAGS) -o $@ -c $< $(LDLIBS)
+# Libraries
+LIBS := -lblas -lboost_program_options
+TEST_LIBS := -lblas -lboost_unit_test_framework -lstdc++fs
 
-build/LidDrivenCavity.o: src/LidDrivenCavity.cpp include/LidDrivenCavity.h include/SolverCG.h
-	$(CXX) $(CXXFLAGS) -o $@ -c $< $(LDLIBS)
+# Doxygen configuration file
+DOXYFILE := Doxyfile
 
-solver: build/LidDrivenCavitySolver.o build/SolverCG.o build/LidDrivenCavity.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
+# Source files
+SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+TEST_SRCS := $(wildcard $(TESTS_DIR)/*.cpp)
+EXCLUDE_OBJ := $(BUILD_DIR)/LidDrivenCavitySolver.o
 
-.PHONY: clean
+# Object files
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
+TEST_OBJS := $(patsubst $(TESTS_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
+NO_MAIN_OBJS := $(filter-out $(EXCLUDE_OBJ), $(OBJS))
 
+# Main executable
+EXEC := $(BIN_DIR)/solver
+
+# Unit test executable
+TEST_EXEC := $(BIN_DIR)/unittests
+
+# Default target
+default: $(EXEC)
+
+# Compile main program
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -o $@ -c $<
+
+# Compile unit test files
+$(BUILD_DIR)/%.o: $(TESTS_DIR)/%.cpp
+	$(CXX) $(TEST_CXXFLAGS) -I$(INCLUDE_DIR) -o $@ -c $<
+
+# Build main executable
+$(EXEC): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS)
+
+# Build unit test executable
+unittests: $(TEST_EXEC)
+$(TEST_EXEC): $(TEST_OBJS) $(NO_MAIN_OBJS)
+	$(CXX) $(TEST_CXXFLAGS) -o $@ $^ $(LIBS) $(TEST_LIBS)
+
+# Clean
 clean:
-	-rm -rf build/*
-	-rm solver
+	-rm -rf $(BUILD_DIR)/*
+	-rm -rf $(BIN_DIR)/*
+	-rm -rf $(DOC_DIR)/*
+
+# Generate documentation
+doc:
+	doxygen $(DOXYFILE)
+
+# PHONY targets
+.PHONY: default unittests clean doc

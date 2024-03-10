@@ -1,12 +1,17 @@
 #pragma once
 
+enum class SolverCGErrorCode {
+    SUCCESS,
+    CONVERGE_FAILED
+};
+
 class SolverCG
 {
 public:
     SolverCG(int pNx, int pNy, double pdx, double pdy);
     ~SolverCG();
 
-    void Solve(double* b, double* x);
+    SolverCGErrorCode Solve(double* b, double* x);
 
 private:
     double dx;

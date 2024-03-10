@@ -32,7 +32,9 @@ SolverCG::~SolverCG()
 }
 
 
-void SolverCG::Solve(double* b, double* x) {
+SolverCGErrorCode 
+SolverCG::Solve(double* b, double* x) 
+{
     unsigned int n = Nx*Ny;
     int k;
     double alpha;
@@ -44,7 +46,7 @@ void SolverCG::Solve(double* b, double* x) {
     if (eps < tol*tol) {
         std::fill(x, x+n, 0.0);
         cout << "Norm is " << eps << endl;
-        return;
+        return SolverCGErrorCode::SUCCESS;
     }
 
     ApplyOperator(x, t);
@@ -84,18 +86,26 @@ void SolverCG::Solve(double* b, double* x) {
 
     if (k == 5000) {
         cout << "FAILED TO CONVERGE" << endl;
-        exit(-1);
+        return SolverCGErrorCode::CONVERGE_FAILED;
     }
 
     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
+    return SolverCGErrorCode::SUCCESS;
 }
 
-
+/**
+ * @brief Applies the 2nd order laplacian to the input and
+ * copies it across to the output.
+ * 
+ * @param    in     Matrix array input.
+ * @param    out    Matrix array output.
+ */
 void SolverCG::ApplyOperator(double* in, double* out) {
     // Assume ordered with y-direction fastest (column-by-column)
     double dx2i = 1.0/dx/dx;
     double dy2i = 1.0/dy/dy;
-    int jm1 = 0, jp1 = 2;
+    int jm1 = 0;
+    int jp1 = 2;
     for (int j = 1; j < Ny - 1; ++j) {
         for (int i = 1; i < Nx - 1; ++i) {
             out[IDX(i,j)] = ( -     in[IDX(i-1, j)]
@@ -110,9 +120,18 @@ void SolverCG::ApplyOperator(double* in, double* out) {
     }
 }
 
-
+/**
+ * @brief Calaculates the the expression Mij / 2(dx + dy) for all
+ * interior points of the the input matrix and copies that
+ * expression across to the output matrix. The boundaries remain
+ * the same.
+ * 
+ * @param    in     Matrix array input.
+ * @param    out    Matrix array output.
+ */
 void SolverCG::Precondition(double* in, double* out) {
-    int i, j;
+    int i;
+    int j;
     double dx2i = 1.0/dx/dx;
     double dy2i = 1.0/dy/dy;
     double factor = 2.0*(dx2i + dy2i);
@@ -133,6 +152,12 @@ void SolverCG::Precondition(double* in, double* out) {
     }
 }
 
+/**
+ * @brief Modifies the input matrix such that all
+ * the boundaries have a value of 0.
+ * 
+ * @param    inout  Matrix array to be modified.
+ */
 void SolverCG::ImposeBC(double* inout) {
         // Boundaries
     for (int i = 0; i < Nx; ++i) {
