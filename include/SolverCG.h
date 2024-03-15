@@ -14,14 +14,14 @@ public:
     SolverCGErrorCode Solve(double* b, double* x);
 
 private:
-    double dx;
-    double dy;
-    int Nx;
-    int Ny;
-    double* r;
-    double* p;
-    double* z;
-    double* t;
+    double m_dx;
+    double m_dy;
+    int m_Nx;
+    int m_Ny;
+    double* m_r;
+    double* m_p;
+    double* m_z;
+    double* m_t;
 
     void ApplyOperator(double* p, double* t);
     void Precondition(double* p, double* t);

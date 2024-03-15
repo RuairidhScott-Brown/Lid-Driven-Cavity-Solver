@@ -7,35 +7,35 @@ using namespace std;
 
 #include "../include/SolverCG.h"
 
-#define IDX(I,J) ((J)*Nx + (I))
+#define IDX(I,J) ((J)*m_Nx + (I))
 
 SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy)
 {
-    dx = pdx;
-    dy = pdy;
-    Nx = pNx;
-    Ny = pNy;
-    int n = Nx*Ny;
-    r = new double[n];
-    p = new double[n];
-    z = new double[n];
-    t = new double[n]; //temp
+    m_dx = pdx;
+    m_dy = pdy;
+    m_Nx = pNx;
+    m_Ny = pNy;
+    int n = m_Nx*m_Ny;
+    m_r = new double[n];
+    m_p = new double[n];
+    m_z = new double[n];
+    m_t = new double[n]; //temp
 }
 
 
 SolverCG::~SolverCG()
 {
-    delete[] r;
-    delete[] p;
-    delete[] z;
-    delete[] t;
+    delete[] m_r;
+    delete[] m_p;
+    delete[] m_z;
+    delete[] m_t;
 }
 
 
 SolverCGErrorCode 
 SolverCG::Solve(double* b, double* x) 
 {
-    unsigned int n = Nx*Ny;
+    unsigned int n = m_Nx*m_Ny;
     int k;
     double alpha;
     double beta;
@@ -49,38 +49,38 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::SUCCESS;
     }
 
-    ApplyOperator(x, t);
-    cblas_dcopy(n, b, 1, r, 1);        // r_0 = b (i.e. b)
-    ImposeBC(r);
+    ApplyOperator(x, m_t);
+    cblas_dcopy(n, b, 1, m_r, 1);        // r_0 = b (i.e. b)
+    ImposeBC(m_r);
 
-    cblas_daxpy(n, -1.0, t, 1, r, 1);
-    Precondition(r, z);
-    cblas_dcopy(n, z, 1, p, 1);        // p_0 = r_0
+    cblas_daxpy(n, -1.0, m_t, 1, m_r, 1);
+    Precondition(m_r, m_z);
+    cblas_dcopy(n, m_z, 1, m_p, 1);        // p_0 = r_0
 
     k = 0;
     do {
         k++;
-        // Perform action of Nabla^2 * p
-        ApplyOperator(p, t);
+        // Perform action of Nabla^2 * m_p
+        ApplyOperator(m_p, m_t);
 
-        alpha = cblas_ddot(n, t, 1, p, 1);  // alpha = p_k^T A p_k
-        alpha = cblas_ddot(n, r, 1, z, 1) / alpha; // compute alpha_k
-        beta  = cblas_ddot(n, r, 1, z, 1);  // z_k^T r_k
+        alpha = cblas_ddot(n, m_t, 1, m_p, 1);  // alpha = p_k^T A p_k
+        alpha = cblas_ddot(n, m_r, 1, m_z, 1) / alpha; // compute alpha_k
+        beta  = cblas_ddot(n, m_r, 1, m_z, 1);  // z_k^T r_k
 
-        cblas_daxpy(n,  alpha, p, 1, x, 1);  // x_{k+1} = x_k + alpha_k p_k
-        cblas_daxpy(n, -alpha, t, 1, r, 1); // r_{k+1} = r_k - alpha_k A p_k
+        cblas_daxpy(n,  alpha, m_p, 1, x, 1);  // x_{k+1} = x_k + alpha_k p_k
+        cblas_daxpy(n, -alpha, m_t, 1, m_r, 1); // r_{k+1} = r_k - alpha_k A p_k
 
-        eps = cblas_dnrm2(n, r, 1);
+        eps = cblas_dnrm2(n, m_r, 1);
 
         if (eps < tol*tol) {
             break;
         }
-        Precondition(r, z);
-        beta = cblas_ddot(n, r, 1, z, 1) / beta;
+        Precondition(m_r, m_z);
+        beta = cblas_ddot(n, m_r, 1, m_z, 1) / beta;
 
-        cblas_dcopy(n, z, 1, t, 1);
-        cblas_daxpy(n, beta, p, 1, t, 1);
-        cblas_dcopy(n, t, 1, p, 1);
+        cblas_dcopy(n, m_z, 1, m_t, 1);
+        cblas_daxpy(n, beta, m_p, 1, m_t, 1);
+        cblas_dcopy(n, m_t, 1, m_p, 1);
 
     } while (k < 5000); // Set a maximum number of iterations
 
@@ -102,12 +102,12 @@ SolverCG::Solve(double* b, double* x)
  */
 void SolverCG::ApplyOperator(double* in, double* out) {
     // Assume ordered with y-direction fastest (column-by-column)
-    double dx2i = 1.0/dx/dx;
-    double dy2i = 1.0/dy/dy;
+    double dx2i = 1.0/m_dx/m_dx;
+    double dy2i = 1.0/m_dy/m_dy;
     int jm1 = 0;
     int jp1 = 2;
-    for (int j = 1; j < Ny - 1; ++j) {
-        for (int i = 1; i < Nx - 1; ++i) {
+    for (int j = 1; j < m_Ny - 1; ++j) {
+        for (int i = 1; i < m_Nx - 1; ++i) {
             out[IDX(i,j)] = ( -     in[IDX(i-1, j)]
                               + 2.0*in[IDX(i,   j)]
                               -     in[IDX(i+1, j)])*dx2i
@@ -132,23 +132,23 @@ void SolverCG::ApplyOperator(double* in, double* out) {
 void SolverCG::Precondition(double* in, double* out) {
     int i;
     int j;
-    double dx2i = 1.0/dx/dx;
-    double dy2i = 1.0/dy/dy;
+    double dx2i = 1.0/m_dx/m_dx;
+    double dy2i = 1.0/m_dy/m_dy;
     double factor = 2.0*(dx2i + dy2i);
-    for (i = 1; i < Nx - 1; ++i) {
-        for (j = 1; j < Ny - 1; ++j) {
+    for (i = 1; i < m_Nx - 1; ++i) {
+        for (j = 1; j < m_Ny - 1; ++j) {
             out[IDX(i,j)] = in[IDX(i,j)]/factor;
         }
     }
     // Boundaries
-    for (i = 0; i < Nx; ++i) {
+    for (i = 0; i < m_Nx; ++i) {
         out[IDX(i, 0)] = in[IDX(i,0)];
-        out[IDX(i, Ny-1)] = in[IDX(i, Ny-1)];
+        out[IDX(i, m_Ny-1)] = in[IDX(i, m_Ny-1)];
     }
 
-    for (j = 0; j < Ny; ++j) {
+    for (j = 0; j < m_Ny; ++j) {
         out[IDX(0, j)] = in[IDX(0, j)];
-        out[IDX(Nx - 1, j)] = in[IDX(Nx - 1, j)];
+        out[IDX(m_Nx - 1, j)] = in[IDX(m_Nx - 1, j)];
     }
 }
 
@@ -160,14 +160,14 @@ void SolverCG::Precondition(double* in, double* out) {
  */
 void SolverCG::ImposeBC(double* inout) {
         // Boundaries
-    for (int i = 0; i < Nx; ++i) {
+    for (int i = 0; i < m_Nx; ++i) {
         inout[IDX(i, 0)] = 0.0;
-        inout[IDX(i, Ny-1)] = 0.0;
+        inout[IDX(i, m_Ny-1)] = 0.0;
     }
 
-    for (int j = 0; j < Ny; ++j) {
+    for (int j = 0; j < m_Ny; ++j) {
         inout[IDX(0, j)] = 0.0;
-        inout[IDX(Nx - 1, j)] = 0.0;
+        inout[IDX(m_Nx - 1, j)] = 0.0;
     }
 
 }
