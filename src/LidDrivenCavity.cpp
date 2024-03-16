@@ -56,6 +56,7 @@ void LidDrivenCavity::Initialise()
     CleanUp();
 
     m_v   = new double[m_Npts]();
+    m_vnew = new double[m_Npts]();
     m_s   = new double[m_Npts]();
     m_tmp = new double[m_Npts]();
     m_cg  = new SolverCG(m_Nx, m_Ny, m_dx, m_dy);
@@ -110,7 +111,7 @@ void LidDrivenCavity::WriteSolution(std::string file)
         for (int j = 0; j < m_Ny; ++j)
         {
             k = IDX(i, j);
-            f << i * m_dx << " " << j * m_dy << " " << m_v[k] <<  " " << m_s[k] 
+            f << i * m_dx << " " << j * m_dy << " " << m_vnew[k] <<  " " << m_s[k] 
               << " " << u0[k] << " " << u1[k] << std::endl;
         }
         f << std::endl;
@@ -145,6 +146,7 @@ void LidDrivenCavity::CleanUp()
 {
     if (m_v) {
         delete[] m_v;
+        delete[] m_vnew;
         delete[] m_s;
         delete[] m_tmp;
         delete m_cg;
@@ -195,7 +197,7 @@ void LidDrivenCavity::Advance()
     // Time advance vorticity
     for (int i = 1; i < m_Nx - 1; ++i) {
         for (int j = 1; j < m_Ny - 1; ++j) {
-            m_v[IDX(i,j)] = m_v[IDX(i,j)] + m_dt*(
+            m_vnew[IDX(i,j)] = m_v[IDX(i,j)] + m_dt*(
                 ( (m_s[IDX(i+1,j)] - m_s[IDX(i-1,j)]) * 0.5 * dxi
                  *(m_v[IDX(i,j+1)] - m_v[IDX(i,j-1)]) * 0.5 * dyi)
               - ( (m_s[IDX(i,j+1)] - m_s[IDX(i,j-1)]) * 0.5 * dyi
@@ -212,7 +214,7 @@ void LidDrivenCavity::Advance()
     const int l = 3;
     for (int i = 0; i < m_Nx; ++i) {
         for (int j = 0; j < m_Ny; ++j) {
-            m_v[IDX(i,j)] = -M_PI * M_PI * (k * k + l * l)
+            m_vnew[IDX(i,j)] = -M_PI * M_PI * (k * k + l * l)
                                        * sin(M_PI * k * i * m_dx)
                                        * sin(M_PI * l * j * m_dy);
         }
@@ -220,7 +222,7 @@ void LidDrivenCavity::Advance()
     */
 
     // Solve Poisson problem
-    m_cg->Solve(m_v, m_s);
+    m_cg->Solve(m_vnew, m_s);
 }
 
 
@@ -228,7 +230,7 @@ const double* const
 LidDrivenCavity::GetVorticity() 
 const
 {
-    return m_v;
+    return m_vnew;
 }
 
 const double* const 

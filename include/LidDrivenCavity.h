@@ -33,24 +33,25 @@ public:
 
 
 private:
-    double* m_v   = nullptr;
-    double* m_s   = nullptr;
-    double* m_tmp = nullptr;
+    double* m_v     {};
+    double* m_vnew  {};
+    double* m_s     {};
+    double* m_tmp   {};
 
-    double m_dt   = 0.01;
-    double m_T    = 1.0;
-    double m_dx;
-    double m_dy;
-    int    m_Nx   = 9;
-    int    m_Ny   = 9;
-    int    m_Npts = 81;
-    double m_Lx   = 1.0;
-    double m_Ly   = 1.0;
-    double m_Re   = 10;
-    double m_U    = 1.0;
-    double m_nu   = 0.1;
+    double m_dt     {0.01};
+    double m_T      {1.0};
+    double m_dx     {};
+    double m_dy     {};
+    int    m_Nx     {9};
+    int    m_Ny     {9};
+    int    m_Npts   {81};
+    double m_Lx     {1.0};
+    double m_Ly     {1.0};
+    double m_Re     {10};
+    double m_U      {1.0};
+    double m_nu     {0.1};
 
-    SolverCG* m_cg = nullptr;
+    SolverCG* m_cg {};
 
     void CleanUp();
     void UpdateDxDy();
