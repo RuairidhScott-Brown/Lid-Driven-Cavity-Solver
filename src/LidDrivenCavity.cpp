@@ -61,6 +61,7 @@ void LidDrivenCavity::SetRank(int rankRow, int rankCol)
 void LidDrivenCavity::SetSize(int size)
 {
     m_size = size;
+    m_sizeX = sqrt(m_size);
 }
 
 void LidDrivenCavity::SetCommunicator(MPI_Comm grid) 
@@ -78,10 +79,6 @@ void LidDrivenCavity::Initialise()
     m_vtemp = new double[m_Npts]();
     m_s   = new double[m_Npts]();
     m_tmp = new double[m_Npts]();
-
-    m_cg  = new SolverCG(m_Nx, m_Ny, m_dx, m_dy);
-
-    m_sizeX = sqrt(m_size);
 
     m_lNx = m_Nx / m_sizeX;
     m_lNy = m_Ny / m_sizeX;
@@ -153,10 +150,15 @@ void LidDrivenCavity::Initialise()
 
     if (m_rankRow == 0) m_startNy++;
     if (m_rankRow == (m_sizeX-1)) m_endNy--;
-    std::cout << std::endl;
-    std::cout <<"(" << m_rankRow << "," << m_rankCol << ") " << "Start: x " << m_startNx << " End: x " << m_endNx << std::endl;
-    std::cout <<"(" << m_rankRow << "," << m_rankCol << ") " << "Start: y " << m_startNy << " End: y " << m_endNy << std::endl;
+    // std::cout << std::endl;
+    // std::cout <<"(" << m_rankRow << "," << m_rankCol << ") " << "Start: x " << m_startNx << " End: x " << m_endNx << std::endl;
+    // std::cout <<"(" << m_rankRow << "," << m_rankCol << ") " << "Start: y " << m_startNy << " End: y " << m_endNy << std::endl;
 
+    m_cg  = new SolverCG(m_Nx, m_Ny, m_dx, m_dy);
+    m_cg->SetCommunicator(m_grid);
+    m_cg->SetSize(m_size);
+    m_cg->SetRank(m_rankRow, m_rankCol);
+    m_cg->SetSubGridDimensions(m_startNx, m_endNx, m_startNy, m_endNy);
 }
 
 void LidDrivenCavity::Integrate()
@@ -281,17 +283,14 @@ void LidDrivenCavity::Advance()
 
     if (m_rankRow == 0) {
         for (int i = m_startNx; i < m_endNx; ++i) {
-            // if((m_rankRow == 0 && m_rankCol == 1) && k == 1) std::cout << "(" << m_rankRow << "," << m_rankCol << ") " << std::endl;
         // Bottom
             m_vtemp[IDX(i,0)]    = 2.0 * dy2i * (m_s[IDX(i,0)]    - m_s[IDX(i,1)]);
-            // if((m_rankRow == 0 && m_rankCol == 1) && k == 1) std::cout << m_vtemp[IDX(i,0)] << std::endl;
         }
     }
     if (m_rankRow == (m_sizeX-1)) {
         for (int i = m_startNx; i < m_endNx; ++i) {
             m_vtemp[IDX(i,m_Ny-1)] = 2.0 * dy2i * (m_s[IDX(i,m_Ny-1)] - m_s[IDX(i,m_Ny-2)])
                         - 2.0 * dyi*m_U;
-            // std::cout << m_vtemp[IDX(i,m_Ny-1)] << std::endl;
         }
     }
 

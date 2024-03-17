@@ -126,6 +126,7 @@ BOOST_AUTO_TEST_CASE(TestSolverCG){
     DefaultLidDrivenCavity dldc {};
 
     SolverCG solver(dldc.Nx, dldc.Ny, dldc.dx, dldc.dy);
+    solver.CalculateSubGridDimensions();
 
     int n {dldc.Nx*dldc.Ny};
     int Nx {dldc.Nx};
@@ -164,6 +165,7 @@ BOOST_AUTO_TEST_CASE(TestSolverCGConverFailed)
     double x[n] {};
 
     SolverCG solver(dldc.Nx, dldc.Ny, dldc.dx, dldc.dy);
+    solver.CalculateSubGridDimensions();
 
     SolverCGErrorCode result {solver.Solve(b, x)};
     BOOST_CHECK(result == SolverCGErrorCode::CONVERGE_FAILED);
@@ -178,6 +180,7 @@ BOOST_AUTO_TEST_CASE(TestSolverCGAllZeros)
     double x[n] {};
 
     SolverCG solver(dldc.Nx, dldc.Ny, dldc.dx, dldc.dy);
+    solver.CalculateSubGridDimensions();
 
     SolverCGErrorCode result {solver.Solve(b, x)};
 

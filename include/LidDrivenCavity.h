@@ -68,7 +68,6 @@ private:
     int m_rankCol    {};
     int m_size       {};
     int m_sizeX      {};
-    int k {};
 
     SolverCG* m_cg {};
     MPI_Comm m_grid {};
