@@ -89,7 +89,7 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
 
-    cout << "Converged in " << k << " iterations. eps = " << eps << endl;
+    // cout << "Converged in " << k << " iterations. eps = " << eps << endl;
     return SolverCGErrorCode::SUCCESS;
 }
 

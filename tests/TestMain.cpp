@@ -8,12 +8,32 @@
 #include <cmath>
 #include <iostream>
 #include <iomanip>
+#include <mpi.h>
 
 #define IDX(I,J) ((J)*Nx + (I))
 
 #include "../include/SolverCG.h"
 #include "../include/LidDrivenCavity.h"
 
+
+struct MPIFixture {
+    public:
+        explicit MPIFixture() {
+            argc = boost::unit_test::framework::master_test_suite().argc;
+            argv = boost::unit_test::framework::master_test_suite().argv;
+            cout << "Initialising MPI" << endl;
+            MPI_Init(&argc, &argv);
+        }
+
+        ~MPIFixture() {
+            cout << "Finalising MPI" << endl;
+            MPI_Finalize();
+        }
+
+        int argc;
+        char **argv;
+};
+BOOST_GLOBAL_FIXTURE(MPIFixture);
 
 struct DefaultLidDrivenCavity {
     int Nx {9};
@@ -169,6 +189,27 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity)
 {
     DefaultLidDrivenCavity dldc {};
 
+    int worldSize {};
+    int worldRank {};
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
+
+    MPI_Comm grid;
+    const int dims {2};
+    const int nAxisRanks {sqrt(worldSize)};
+    int sizes[dims] = {nAxisRanks, nAxisRanks};
+    int periods[dims] = {0, 1};
+    int reorder = 1;
+
+    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
+
+    int coords[dims];
+    int gridRank {};
+
+    MPI_Comm_rank(grid, &gridRank);
+    MPI_Cart_coords(grid, gridRank, dims, coords);
+
     LidDrivenCavity solver {LidDrivenCavity()};
 
     int n {dldc.Nx*dldc.Ny};
@@ -178,6 +219,9 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity)
     solver.SetTimeStep(dldc.dt);
     solver.SetFinalTime(dldc.T);
     solver.SetReynoldsNumber(dldc.Re);
+    solver.SetRank(coords[0], coords[1]);
+    solver.SetSize(worldSize);
+    solver.SetCommunicator(grid);
 
     solver.Initialise();
     solver.Integrate();

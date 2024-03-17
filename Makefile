@@ -1,9 +1,9 @@
 # Compiler
-CXX := g++
-CC := g++
+CXX := mpicxx
+CC := mpicxx
 
 # Compiler flags
-CXXFLAGS := -std=c++11 -Wall -O3
+CXXFLAGS := -std=c++11 -Wall -pedantic
 TEST_CXXFLAGS := -std=c++11 -Wall
 
 # Directories
