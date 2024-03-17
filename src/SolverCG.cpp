@@ -62,20 +62,15 @@ SolverCG::Solve(double* b, double* x)
     }
 
     ApplyOperator(x, m_t);
-    cblas_dcopy(n, b, 1, m_r, 1);        // r_0 = b (i.e. b)
+    // cblas_dcopy(n, b, 1, m_r, 1);        // r_0 = b (i.e. b)
+    MPI_cblas_dcopy(n, b, m_r);        // r_0 = b (i.e. b)
     ImposeBC(m_r);
 
-    cblas_daxpy(n, -1.0, m_t, 1, m_r, 1);
-    // MPI_cblas_daxpy(n, -1.0, m_t, m_r);
-    // if (m_globalRank == 0 && k == 0) {
-    //     std::cout << std::endl;
-    //     for(int i {}; i < 81; ++i) {
-    //         std::cout << m_r[i] << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+    MPI_cblas_daxpy(n, -1.0, m_t, m_r);
     Precondition(m_r, m_z);
-    cblas_dcopy(n, m_z, 1, m_p, 1);        // p_0 = r_0
+    // cblas_dcopy(n, m_z, 1, m_p, 1);        // p_0 = r_0
+    MPI_cblas_dcopy(n, m_z, m_p);        // p_0 = r_0
+
 
     do {
         k++;
@@ -86,9 +81,9 @@ SolverCG::Solve(double* b, double* x)
         beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
         alpha = beta / alpha;
 
-        cblas_daxpy(n,  alpha, m_p, 1, x, 1);  // x_{k+1} = x_k + alpha_k p_k
-        // MPI_cblas_daxpy(n, alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
-        cblas_daxpy(n, -alpha, m_t, 1, m_r, 1); // r_{k+1} = r_k - alpha_k A p_k
+        MPI_cblas_daxpy(n, alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
+        MPI_cblas_daxpy(n, -alpha, m_t, m_r); // r_{k+1} = r_k - alpha_k A p_k
+
 
         eps = MPI_cblas_dnrm2(n, m_r);
 
@@ -98,9 +93,10 @@ SolverCG::Solve(double* b, double* x)
         Precondition(m_r, m_z);
         beta = MPI_cblas_ddot(n, m_r, m_z) / beta;
 
-        cblas_dcopy(n, m_z, 1, m_t, 1);
-        cblas_daxpy(n, beta, m_p, 1, m_t, 1);
-        cblas_dcopy(n, m_t, 1, m_p, 1);
+        // cblas_dcopy(n, m_z, 1, m_t, 1);
+        MPI_cblas_dcopy(n, m_z, m_t);
+        MPI_cblas_daxpy(n, beta, m_p, m_t);
+        MPI_cblas_dcopy(n, m_t, m_p);
 
     } while (k < 5000); // Set a maximum number of iterations
 
@@ -109,9 +105,9 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
 
-    if (m_rankCol == 0 && m_rankRow == 0) {
-        cout << "Converged in " << k << " iterations. eps = " << eps << endl;
-    }
+    // if (m_rankCol == 0 && m_rankRow == 0) {
+    //     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
+    // }
     return SolverCGErrorCode::SUCCESS;
 }
 
@@ -147,7 +143,23 @@ void SolverCG::MPI_cblas_daxpy(const int m, const double alpha, double* const x,
 
     cblas_daxpy(m_localSize, alpha, m_localArray1, 1, m_localArray2, 1);
 
-    MPI_Gatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, 0, m_grid);
+    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, m_grid);
+    return ;
+}
+
+void SolverCG::MPI_cblas_dcopy(const int m, double* const x, double* const y)
+{
+    if (!m_useMPI) {
+        cblas_dcopy(m, x, 1, y, 1);
+        return;
+    }
+
+    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+
+    cblas_dcopy(m_localSize, m_localArray1, 1, m_localArray2, 1);
+
+    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, m_grid);
     return ;
 }
 

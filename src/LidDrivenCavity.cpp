@@ -167,9 +167,9 @@ void LidDrivenCavity::Integrate()
     for (int t = 0; t < NSteps; ++t)
     {
         if(m_rankRow == 0 && m_rankCol == 0) {
-            std::cout << "Step: " << setw(8) << t
-                    << "  Time: " << setw(8) << t*m_dt
-                    << std::endl;
+            // std::cout << "Step: " << setw(8) << t
+            //         << "  Time: " << setw(8) << t*m_dt
+            //         << std::endl;
         }
         Advance();
     }

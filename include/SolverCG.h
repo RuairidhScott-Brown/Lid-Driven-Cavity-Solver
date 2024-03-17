@@ -58,6 +58,8 @@ private:
     double MPI_cblas_ddot(const int m, const double* const x, const double* const y);
     double MPI_cblas_dnrm2(const int m, const double* const x);
     void MPI_cblas_daxpy(const int m, const double alpha, double* const x,  double* const y);
+    void MPI_cblas_dcopy(const int m, double* const x, double* const y);
+
 
 
     void SetSize(int size);
