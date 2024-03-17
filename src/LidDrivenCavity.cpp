@@ -156,7 +156,6 @@ void LidDrivenCavity::Initialise()
 
     m_cg  = new SolverCG(m_Nx, m_Ny, m_dx, m_dy);
     m_cg->SetCommunicator(m_grid);
-    m_cg->SetSize(m_size);
     m_cg->SetRank(m_rankRow, m_rankCol);
     m_cg->SetSubGridDimensions(m_startNx, m_endNx, m_startNy, m_endNy);
 }
@@ -168,9 +167,9 @@ void LidDrivenCavity::Integrate()
     for (int t = 0; t < NSteps; ++t)
     {
         if(m_rankRow == 0 && m_rankCol == 0) {
-            // std::cout << "Step: " << setw(8) << t
-            //         << "  Time: " << setw(8) << t*m_dt
-            //         << std::endl;
+            std::cout << "Step: " << setw(8) << t
+                    << "  Time: " << setw(8) << t*m_dt
+                    << std::endl;
         }
         Advance();
     }

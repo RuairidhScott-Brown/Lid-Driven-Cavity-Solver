@@ -33,6 +33,14 @@ SolverCG::~SolverCG()
     delete[] m_z;
     delete[] m_t;
     delete[] m_t2;
+    if (m_arrays) {
+        delete[] m_arrays;
+        delete[] m_disp;
+    }
+    if (m_localArray1) {
+        delete[] m_localArray1;
+        delete[] m_localArray2;
+    }
 }
 
 
@@ -40,13 +48,13 @@ SolverCGErrorCode
 SolverCG::Solve(double* b, double* x) 
 {
     unsigned int n = m_Nx*m_Ny;
-    int k;
+    int k {};
     double alpha;
     double beta;
     double eps;
     double tol = 0.001;
 
-    eps = cblas_dnrm2(n, b, 1);
+    eps = MPI_cblas_dnrm2(n, b);
     if (eps < tol*tol) {
         std::fill(x, x+n, 0.0);
         cout << "Norm is " << eps << endl;
@@ -58,29 +66,37 @@ SolverCG::Solve(double* b, double* x)
     ImposeBC(m_r);
 
     cblas_daxpy(n, -1.0, m_t, 1, m_r, 1);
+    // MPI_cblas_daxpy(n, -1.0, m_t, m_r);
+    // if (m_globalRank == 0 && k == 0) {
+    //     std::cout << std::endl;
+    //     for(int i {}; i < 81; ++i) {
+    //         std::cout << m_r[i] << " ";
+    //     }
+    //     std::cout << std::endl;
+    // }
     Precondition(m_r, m_z);
     cblas_dcopy(n, m_z, 1, m_p, 1);        // p_0 = r_0
 
-    k = 0;
     do {
         k++;
         // Perform action of Nabla^2 * m_p
         ApplyOperator(m_p, m_t);
 
-        alpha = cblas_ddot(n, m_t, 1, m_p, 1);  // alpha = p_k^T A p_k
-        alpha = cblas_ddot(n, m_r, 1, m_z, 1) / alpha; // compute alpha_k
-        beta  = cblas_ddot(n, m_r, 1, m_z, 1);  // z_k^T r_k
+        alpha = MPI_cblas_ddot(n, m_t, m_p);  // alpha = p_k^T A p_k
+        beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
+        alpha = beta / alpha;
 
         cblas_daxpy(n,  alpha, m_p, 1, x, 1);  // x_{k+1} = x_k + alpha_k p_k
+        // MPI_cblas_daxpy(n, alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
         cblas_daxpy(n, -alpha, m_t, 1, m_r, 1); // r_{k+1} = r_k - alpha_k A p_k
 
-        eps = cblas_dnrm2(n, m_r, 1);
+        eps = MPI_cblas_dnrm2(n, m_r);
 
         if (eps < tol*tol) {
             break;
         }
         Precondition(m_r, m_z);
-        beta = cblas_ddot(n, m_r, 1, m_z, 1) / beta;
+        beta = MPI_cblas_ddot(n, m_r, m_z) / beta;
 
         cblas_dcopy(n, m_z, 1, m_t, 1);
         cblas_daxpy(n, beta, m_p, 1, m_t, 1);
@@ -93,8 +109,62 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
 
-    // cout << "Converged in " << k << " iterations. eps = " << eps << endl;
+    if (m_rankCol == 0 && m_rankRow == 0) {
+        cout << "Converged in " << k << " iterations. eps = " << eps << endl;
+    }
     return SolverCGErrorCode::SUCCESS;
+}
+
+
+double 
+SolverCG::MPI_cblas_ddot(const int m, const double* const x, const double* const y)
+{
+    if (!m_useMPI) {
+        return cblas_ddot(m, x, 1, y, 1);
+    }
+
+    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+
+    double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray2, 1);
+
+    double globalDotProduct;
+    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_grid);
+
+    return globalDotProduct;
+}
+
+ 
+void SolverCG::MPI_cblas_daxpy(const int m, const double alpha, double* const x, double* const y)
+{
+    if (!m_useMPI) {
+        cblas_daxpy(m, alpha, x, 1, y, 1);
+        return;
+    }
+
+    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+
+    cblas_daxpy(m_localSize, alpha, m_localArray1, 1, m_localArray2, 1);
+
+    MPI_Gatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, 0, m_grid);
+    return ;
+}
+
+double 
+SolverCG::MPI_cblas_dnrm2(const int m, const double* const x)
+{
+    if (!m_useMPI) {
+        return cblas_dnrm2(m, x, 1);
+    }
+    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+
+    double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray1, 1);
+
+    double globalDotProduct;
+    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_grid);
+
+    return sqrt(globalDotProduct);
 }
 
 /**
@@ -196,7 +266,7 @@ void SolverCG::Precondition(double* in, double* out) {
  * 
  * @param    inout  Matrix array to be modified.
  */
-void SolverCG::ImposeBC(double* inout) {
+void SolverCG::ImposeBC(double* inout) { //will this be faster with MPI??
         // Boundaries
     for (int i = 0; i < m_Nx; ++i) {
         inout[IDX(i, 0)] = 0.0;
@@ -213,6 +283,9 @@ void SolverCG::SetCommunicator(MPI_Comm grid)
 {
     m_grid = grid;
     m_useMPI = true;
+    MPI_Comm_rank(grid, &m_globalRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &m_size);
+    SetSize(m_size);
 }
 
 void SolverCG::SetRank(int rankRow, int rankCol)
@@ -223,8 +296,28 @@ void SolverCG::SetRank(int rankRow, int rankCol)
 
 void SolverCG::SetSize(int size)
 {
-    m_size = size;
     m_sizeX = sqrt(m_size);
+    int n {m_Nx*m_Ny};
+    int blockSize {n / m_size};
+    int remainder {n % m_size};
+    m_arrays = new int[m_size];
+    m_disp = new int[m_size];
+    int offset {};
+
+
+    for (int i {}; i < m_size; ++i) {
+        if (i < remainder) {
+            m_arrays[i] = blockSize + 1;
+        } else {
+            m_arrays[i] = blockSize;
+        }
+        m_disp[i] = offset;
+        offset += m_arrays[i];
+    }
+
+    m_localSize = m_arrays[m_globalRank];
+    m_localArray1 = new double[m_localSize]; // Local block of first vector
+    m_localArray2 = new double[m_localSize];
 }
 
 void SolverCG::SetSubGridDimensions(int startNx, int endNx, int startNy, int endNy) 
