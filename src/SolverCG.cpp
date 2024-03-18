@@ -9,7 +9,7 @@ using namespace std;
 
 #include "../include/SolverCG.h"
 
-#define IDX(I,J) ((J)*m_Nx + (I))
+#define IDX(I,J) ((J)*m_Ny + (I))
 
 SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy)
 {
@@ -17,6 +17,7 @@ SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy)
     m_dy = pdy;
     m_Nx = pNx;
     m_Ny = pNy;
+    m_height = pNy;
     int n = m_Nx*m_Ny;
     m_r = new double[n];
     m_p = new double[n];
@@ -40,15 +41,20 @@ SolverCG::~SolverCG()
     delete[] m_t2;
     delete[] m_pre;
     delete[] m_bc;
-    if (m_arrays) {
-        delete[] m_arrays;
-        delete[] m_disp;
-    }
     if (m_localArray1) {
         delete[] m_localArray1;
         delete[] m_localArray2;
+        delete[] m_localArray11;
+        delete[] m_localArray22;
         delete[] m_localPre;
         delete[] m_localBC;
+        delete[] m_widths;
+        delete[] m_ls;
+        delete[] m_rls;
+        delete[] m_rdisp;
+        delete[] m_disp;
+        delete[] m_disp2;
+        delete[] m_arrays;
     }
     // if (m_local) {
     //     delete[] m_local;
@@ -73,7 +79,9 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
     }
 
-    ApplyOperator(x, m_t);
+
+    MPI_ApplyOperator(x, m_t);
+
     MPI_cblas_dcopy(n, b, m_r);        // r_0 = b (i.e. b)
     MPI_ImposeBC(m_r);
 
@@ -85,7 +93,8 @@ SolverCG::Solve(double* b, double* x)
     do {
         k++;
         // Perform action of Nabla^2 * m_p
-        ApplyOperator(m_p, m_t);
+        MPI_ApplyOperator(m_p, m_t);
+
 
         alpha = MPI_cblas_ddot(n, m_t, m_p);  // alpha = p_k^T A p_k
         beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
@@ -114,7 +123,7 @@ SolverCG::Solve(double* b, double* x)
         // cout << "FAILED TO CONVERGE" << endl;
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
-
+    m_k++;
     // if (m_rankCol == 0 && m_rankRow == 0) {
     //     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
     // }
@@ -129,13 +138,13 @@ SolverCG::MPI_cblas_ddot(const int m, const double* const x, const double* const
         return cblas_ddot(m, x, 1, y, 1);
     }
 
-    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray2, 1);
 
     double globalDotProduct;
-    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_grid);
+    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
 
     return globalDotProduct;
 }
@@ -148,12 +157,12 @@ void SolverCG::MPI_cblas_daxpy(const int m, const double alpha, double* const x,
         return;
     }
 
-    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     cblas_daxpy(m_localSize, alpha, m_localArray1, 1, m_localArray2, 1);
 
-    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, m_grid);
+    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -164,12 +173,12 @@ void SolverCG::MPI_cblas_dcopy(const int m, double* const x, double* const y)
         return;
     }
 
-    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-    MPI_Scatterv(y, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     cblas_dcopy(m_localSize, m_localArray1, 1, m_localArray2, 1);
 
-    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp, MPI_DOUBLE, m_grid);
+    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -179,12 +188,12 @@ SolverCG::MPI_cblas_dnrm2(const int m, const double* const x)
     if (!m_useMPI) {
         return cblas_dnrm2(m, x, 1);
     }
-    MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray1, 1);
 
     double globalDotProduct;
-    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_grid);
+    MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
 
     return sqrt(globalDotProduct);
 }
@@ -192,63 +201,127 @@ SolverCG::MPI_cblas_dnrm2(const int m, const double* const x)
 void SolverCG::SetSize(int size)
 {
     m_sizeX = sqrt(m_size);
-    int n {m_Nx*m_Ny};
-    int blockSize {n / m_size};
-    int remainder {n % m_size};
-    m_arrays = new int[m_size];
-    m_disp = new int[m_size];
+    
+    int smallWidthSize {(m_height-2) / m_solver_size};
+    int remainder {(m_height-2) % m_solver_size};
+
+    m_widths = new int[m_solver_size];
+    m_ls = new int[m_solver_size];
+    m_rls = new int[m_solver_size];
+    m_disp = new int[m_solver_size];
+    m_rdisp = new int[m_solver_size];
+
     int offset {};
+    int roffset {};
+
+    if (m_solver_rank == 0) {
+        m_start = 1;
+    } else if (m_solver_rank == m_solver_size-1) {
+        m_end = 1;
+    }
+
+    for (int i {}; i < m_solver_size; ++i) {
+        if (i < remainder) {
+            m_widths[i] = smallWidthSize + 1;
+        } else {
+            m_widths[i] = smallWidthSize;
+        }
+        m_disp[i] = offset;
+        m_rdisp[i] = roffset;
+        m_ls[i] = m_widths[i]*m_height + 2*m_height;
+
+        if (i == 0) {
+            m_rls[i] = m_widths[i]*m_height + m_height;
+            roffset += (m_widths[i])*m_height + m_height;
+        } else if (i == m_solver_size -1) {
+            m_rls[i] = m_widths[i]*m_height + m_height;
+            roffset += (m_widths[i])*m_height;
+        } else {
+            m_rls[i] = m_widths[i]*m_height;
+            roffset += (m_widths[i])*m_height;
+
+        }
+        offset += (m_widths[i])*m_height;
+    }
+
+    m_width = m_widths[m_solver_rank];
+    m_l = m_width*m_height + 2*m_height;
+    m_rl = m_rls[m_solver_rank];
+
+    m_localArray11 = new double[m_l](); // Local block of first vector
+    m_localArray22 = new double[m_l]();
+
+    m_left = m_solver_rank - 1;
+    m_right = m_solver_rank + 1;
+    if (m_start) {
+        m_left = MPI_PROC_NULL;
+    } else if (m_end) {
+        m_right = MPI_PROC_NULL;
+    }
+
+    if (m_start) {
+        m_rstart = 0;
+    } else {
+        m_rstart = m_height;
+    }
+
+    int n {m_Nx*m_Ny};
+    int blockSize {n / m_solver_size};
+    remainder = n % m_solver_size;
+    m_arrays = new int[m_solver_size];
+    m_disp2 = new int[m_solver_size];
+    int offset2 {};
 
 
-    for (int i {}; i < m_size; ++i) {
+    for (int i {}; i < m_solver_size; ++i) {
         if (i < remainder) {
             m_arrays[i] = blockSize + 1;
         } else {
             m_arrays[i] = blockSize;
         }
-        m_disp[i] = offset;
-        offset += m_arrays[i];
+        m_disp2[i] = offset2;
+        offset2 += m_arrays[i];
     }
 
-    m_localSize = m_arrays[m_globalRank];
+    m_localSize = m_arrays[m_solver_rank];
     m_localArray1 = new double[m_localSize]; // Local block of first vector
     m_localArray2 = new double[m_localSize];
 }
 
-// void SolverCG::MPI_ApplyOperator(double* in, double* out) 
-// {
-//     int height {m_Ny};
-//     int lowerLocalWidth = m_Nx / m_solver_size;
-//     int lowerRanks = m_solver_size - m_Nx % m_solver_size - 1;
-//     int remainder = m_Nx % m_solver_size;
-
-//     if (m_solver_rank == -1) return;
-
-//     int width = (m_solver_rank < lowerRanks) ? lowerLocalWidth : lowerLocalWidth + 1;
-
-//     double* m_localArray11 = new double[width*height]; // Local block of first vector
-//     double* m_localArray22 = new double[width*];
-
-//     int* m_arrays2 = new int[m_solver_size];
-//     int* m_disp2 = new int[m_solver_size];
-//     int offset {};
+void SolverCG::MPI_ApplyOperator(double* in, double* out) 
+{
+    if (!m_useMPI) {
+        ApplyOperator(in, out);
+        return;
+    }
+    MPI_Scatterv(in, m_ls, m_disp, MPI_DOUBLE, m_localArray11, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(out, m_ls, m_disp, MPI_DOUBLE, m_localArray22, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    Laplace(m_localArray11, m_localArray22);
+    MPI_Allgatherv(&(m_localArray22[m_rstart]), m_rl, MPI_DOUBLE, out, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+    return;
+} 
 
 
-//     for (int i {}; i < m_solver_size; ++i) {
-//         if (i < remainder) {
-//             m_arrays[i] = lowerLocalWidth + 1;
-//         } else {
-//             m_arrays[i] = lowerLocalWidth;
-//         }
-//         m_disp[i] = offset;
-//         offset += m_arrays[i];
-//     }
+void SolverCG::Laplace(double* in, double* out) {
+    // Assume ordered with y-direction fastest (column-by-column)
+    double dx2i = 1.0/m_dx/m_dx;
+    double dy2i = 1.0/m_dy/m_dy;
+    int jm1 = 0;
+    int jp1 = 2;
 
-//     // MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-//     // MPI_Scatterv(x, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-
-
-// }
+    for (int j = 1; j < m_width+1; ++j) {
+        for (int i = 1; i < m_height-1; ++i) {
+            out[IDX(i,j)] = ( -    in[IDX(i-1, j)]
+                              + 2.0*in[IDX(i,   j)]
+                              -     in[IDX(i+1, j)])*dx2i
+                          + ( -     in[IDX(i, jm1)]
+                              + 2.0*in[IDX(i,   j)]
+                              -     in[IDX(i, jp1)])*dy2i;
+        }
+        jm1++;
+        jp1++;
+    }
+}
 
 /**
  * @brief Applies the 2nd order laplacian to the input and
@@ -283,7 +356,7 @@ void SolverCG::ApplyOperator(double* in, double* out) {
         jp1++;
     }
     if (m_useMPI) {
-        MPI_Allreduce(m_t2, out, m_Nx*m_Ny, MPI_DOUBLE, MPI_SUM, m_grid);
+        MPI_Allreduce(m_t2, out, m_Nx*m_Ny, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         std::memset(m_t2, 0, m_Nx*m_Ny*sizeof(double));
     }
 }
@@ -337,12 +410,12 @@ void SolverCG::MPI_Precondition(double* in, double* out)
         return;
     }
 
-    MPI_Scatterv(in, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
-    MPI_Scatterv(out, m_arrays, m_disp, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(in, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(out, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     cblas_dsbmv(CblasColMajor, CblasUpper, m_localSize, 0, 1.0, m_localPre, 1, m_localArray1, 1, 0.0, m_localArray2, 1);
 
-    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp, MPI_DOUBLE, m_grid);
+    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -352,11 +425,11 @@ void SolverCG::MPI_ImposeBC(double* out)
         return;
     }
 
-    MPI_Scatterv(out, m_arrays, m_disp, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(out, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 
     cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_localSize, 0, m_localBC, 1, m_localArray1, 1);
 
-    MPI_Allgatherv(m_localArray1, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp, MPI_DOUBLE, m_grid);
+    MPI_Allgatherv(m_localArray1, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -401,8 +474,8 @@ void SolverCG::DistributeMatrices()
 {
     m_localPre = new double[m_localSize];
     m_localBC = new double[m_localSize];
-    MPI_Scatterv(m_pre, m_arrays, m_disp, MPI_DOUBLE, m_localPre, m_localSize, MPI_DOUBLE, 0, m_grid);
-    MPI_Scatterv(m_bc, m_arrays, m_disp, MPI_DOUBLE, m_localBC, m_localSize, MPI_DOUBLE, 0, m_grid);
+    MPI_Scatterv(m_pre, m_arrays, m_disp2, MPI_DOUBLE, m_localPre, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(m_bc, m_arrays, m_disp2, MPI_DOUBLE, m_localBC, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 }
 
 void SolverCG::SetRank(int rankRow, int rankCol)

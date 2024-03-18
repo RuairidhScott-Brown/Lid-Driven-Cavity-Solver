@@ -34,9 +34,10 @@ private:
     double* m_t2    {};
     double* m_pre   {};
     double* m_bc    {};
-    int*    m_arrays {};
     double* m_localArray1 {}; // Local block of first vector
     double* m_localArray2 {};
+    double* m_localArray11 {}; // Local block of first vector
+    double* m_localArray22 {};
     double* m_localPre {};
     double* m_localBC {};
     double* m_local {};
@@ -57,8 +58,24 @@ private:
     int m_endNx     {};
     int m_endNy     {};
     int m_localSize {};
+    int* m_arrays {};
+    int* m_disp2 {};
     int m_k {};
     bool m_useMPI   {false};
+    int m_height {};
+    int m_width {};
+    int* m_widths {};
+    int* m_ls {};
+    int* m_rls {};
+    int* m_rdisp {};
+    int m_end {};
+    int m_start {};
+    int m_l {};
+    int m_rl {};
+    int m_left {-1};
+    int m_right {-1};
+    int m_rstart {};
+
 
     void ApplyOperator(double* p, double* t);
     void Precondition(double* p, double* t);
@@ -73,6 +90,8 @@ private:
     void DistributeMatrices();
     void MPI_ImposeBC(double* out);
     void MPI_ApplyOperator(double* in, double* out);
+    void Laplace(double* in, double* out);
+
 
 
 
