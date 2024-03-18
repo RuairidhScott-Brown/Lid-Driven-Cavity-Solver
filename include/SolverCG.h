@@ -13,7 +13,7 @@ public:
     SolverCG(int pNx, int pNy, double pdx, double pdy);
     ~SolverCG();
 
-    void SetCommunicator(MPI_Comm grid);
+    void SetCommunicator();
     void SetRank(int rankRow, int rankCol);
     void SetSubGridDimensions(int startNx, int endNx, int startNy, int endNy);
     void CalculateSubGridDimensions();
@@ -41,6 +41,7 @@ private:
     double* m_localArrayX {};
     double* m_localArrayR {};
     double* m_localArrayZ {};
+    double* m_localArrayB {};
     double* m_localPre {};
     double* m_localBC {};
     double* m_local {};
@@ -78,9 +79,6 @@ private:
     int m_left {-1};
     int m_right {-1};
     int m_rstart {};
-    double m_alpha {};
-    double m_beta {};
-    double m_eps {};
 
 
     void ApplyOperator(double* p, double* t);
@@ -97,7 +95,6 @@ private:
     void MPI_ImposeBC(double* out);
     void MPI_ApplyOperator(double* in, double* out);
     void Laplace(double* in, double* out);
-    void temp(double* m_p, double* m_t, double* m_r, double* m_z, double* x);
 
 
 

@@ -155,9 +155,9 @@ void LidDrivenCavity::Initialise()
     // std::cout <<"(" << m_rankRow << "," << m_rankCol << ") " << "Start: y " << m_startNy << " End: y " << m_endNy << std::endl;
 
     m_cg  = new SolverCG(m_Nx, m_Ny, m_dx, m_dy);
-    m_cg->SetCommunicator(m_grid);
-    m_cg->SetRank(m_rankRow, m_rankCol);
-    m_cg->SetSubGridDimensions(m_startNx, m_endNx, m_startNy, m_endNy);
+    m_cg->SetCommunicator();
+    // m_cg->SetRank(m_rankRow, m_rankCol);
+    // m_cg->SetSubGridDimensions(m_startNx, m_endNx, m_startNy, m_endNy);
 }
 
 void LidDrivenCavity::Integrate()
