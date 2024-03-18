@@ -31,13 +31,21 @@ private:
     double* m_p     {};
     double* m_z     {};
     double* m_t     {};
-    double* m_t2     {};
+    double* m_t2    {};
+    double* m_pre   {};
+    double* m_bc    {};
     int*    m_arrays {};
     double* m_localArray1 {}; // Local block of first vector
     double* m_localArray2 {};
+    double* m_localPre {};
+    double* m_localBC {};
+    double* m_local {};
     int* m_disp {};
+    int m_solver_rank {-1}; 
+    int m_solver_size {-1};
 
     MPI_Comm m_grid {};
+    MPI_Comm m_solver_comm {};
 
     int m_rankRow   {};
     int m_rankCol   {};
@@ -59,6 +67,19 @@ private:
     double MPI_cblas_dnrm2(const int m, const double* const x);
     void MPI_cblas_daxpy(const int m, const double alpha, double* const x,  double* const y);
     void MPI_cblas_dcopy(const int m, double* const x, double* const y);
+    void PopulatePreconditionBandedMatrix();
+    void PopulateImposeBCBandedMatrix();
+    void MPI_Precondition(double* in, double* out);
+    void DistributeMatrices();
+    void MPI_ImposeBC(double* out);
+    void MPI_ApplyOperator(double* in, double* out);
+
+
+
+    
+
+
+
 
 
 
