@@ -36,8 +36,11 @@ private:
     double* m_bc    {};
     double* m_localArray1 {}; // Local block of first vector
     double* m_localArray2 {};
-    double* m_localArray11 {}; // Local block of first vector
-    double* m_localArray22 {};
+    double* m_localArrayP {}; // Local block of first vector
+    double* m_localArrayT {};
+    double* m_localArrayX {};
+    double* m_localArrayR {};
+    double* m_localArrayZ {};
     double* m_localPre {};
     double* m_localBC {};
     double* m_local {};
@@ -75,6 +78,9 @@ private:
     int m_left {-1};
     int m_right {-1};
     int m_rstart {};
+    double m_alpha {};
+    double m_beta {};
+    double m_eps {};
 
 
     void ApplyOperator(double* p, double* t);
@@ -87,10 +93,11 @@ private:
     void PopulatePreconditionBandedMatrix();
     void PopulateImposeBCBandedMatrix();
     void MPI_Precondition(double* in, double* out);
-    void DistributeMatrices();
+    void CreateMatrices();
     void MPI_ImposeBC(double* out);
     void MPI_ApplyOperator(double* in, double* out);
     void Laplace(double* in, double* out);
+    void temp(double* m_p, double* m_t, double* m_r, double* m_z, double* x);
 
 
 

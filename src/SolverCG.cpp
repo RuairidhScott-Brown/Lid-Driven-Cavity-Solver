@@ -44,8 +44,11 @@ SolverCG::~SolverCG()
     if (m_localArray1) {
         delete[] m_localArray1;
         delete[] m_localArray2;
-        delete[] m_localArray11;
-        delete[] m_localArray22;
+        delete[] m_localArrayP;
+        delete[] m_localArrayT;
+        delete[] m_localArrayX;
+        delete[] m_localArrayR;
+        delete[] m_localArrayZ;
         delete[] m_localPre;
         delete[] m_localBC;
         delete[] m_widths;
@@ -67,15 +70,18 @@ SolverCG::Solve(double* b, double* x)
 {
     unsigned int n = m_Nx*m_Ny;
     int k {};
-    double alpha;
-    double beta;
-    double eps;
+    m_alpha = 0;
+    m_beta = 0;
+    // double alpha {};
+    // double beta {};
+    // double eps;
+    m_eps = 0;
     double tol = 0.001;
 
-    eps = MPI_cblas_dnrm2(n, b);
-    if (eps < tol*tol) {
+    m_eps = MPI_cblas_dnrm2(n, b);
+    if (m_eps < tol*tol) {
         std::fill(x, x+n, 0.0);
-        cout << "Norm is " << eps << endl;
+        cout << "Norm is " << m_eps << endl;
         return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
     }
 
@@ -89,33 +95,105 @@ SolverCG::Solve(double* b, double* x)
     MPI_Precondition(m_r, m_z);
     MPI_cblas_dcopy(n, m_z, m_p);        // p_0 = r_0
 
+    MPI_Scatterv(m_p, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+
+    MPI_Scatterv(m_t, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(m_r, m_ls, m_disp, MPI_DOUBLE, m_localArrayR, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(m_z, m_ls, m_disp, MPI_DOUBLE, m_localArrayZ, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayX, m_l, MPI_DOUBLE, 0, m_solver_comm);
 
     do {
         k++;
         // Perform action of Nabla^2 * m_p
-        MPI_ApplyOperator(m_p, m_t);
+        // MPI_ApplyOperator(m_p, m_t);
+
+        // cblas_dscal(m_l, 0.0, m_localArrayP, 1);
+        // cblas_dscal(m_l, 0.0, m_localArrayT, 1);
+        // cblas_dscal(m_l, 0.0, m_localArrayX, 1);
+        // cblas_dscal(m_l, 0.0, m_localArrayR, 1);
+        // cblas_dscal(m_l, 0.0, m_localArrayZ, 1);
+        // MPI_Scatterv(m_p, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+        // MPI_Scatterv(m_t, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
+        // MPI_Scatterv(m_r, m_ls, m_disp, MPI_DOUBLE, m_localArrayR, m_l, MPI_DOUBLE, 0, m_solver_comm);
+        // MPI_Scatterv(m_z, m_ls, m_disp, MPI_DOUBLE, m_localArrayZ, m_l, MPI_DOUBLE, 0, m_solver_comm);
+        // MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayX, m_l, MPI_DOUBLE, 0, m_solver_comm);
+        
+        // MPI_ApplyOperator(m_p, m_t);
+        Laplace(m_localArrayP, m_localArrayT);
+
+        // m_alpha = MPI_cblas_ddot(m_Nx*m_Ny, m_t, m_p);  // alpha = p_k^T A p_k
+        // beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
+        // alpha = beta / alpha;
+        double localDotProductAplha = cblas_ddot(m_width*m_height, &m_localArrayT[m_height], 1, &m_localArrayP[m_height], 1);  // alpha = p_k^T A p_k
+        double localDotProductBeta = cblas_ddot(m_width*m_height, &m_localArrayR[m_height], 1, &m_localArrayZ[m_height], 1);  // alpha = p_k^T A p_k
+        
+        MPI_Allreduce(&localDotProductAplha, &m_alpha, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+        MPI_Allreduce(&localDotProductBeta, &m_beta, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+        m_alpha = m_beta / m_alpha;
+
+        // MPI_cblas_daxpy(m_width*m_height, m_alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
+        // MPI_cblas_daxpy(m_width*m_height, -m_alpha, m_t, m_r); // r_{k+1} = r_k - alpha_k A p_k
+        // cblas_daxpy(m_width*m_height, m_alpha, &m_localArrayP[m_height], 1, &m_localArrayX[m_height], 1);
+        cblas_daxpy(m_l, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
+        cblas_daxpy(m_l, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+
+        // eps = MPI_cblas_dnrm2(n, m_r);
+        double localDotProductEps = cblas_ddot(m_width*m_height, &m_localArrayR[m_height], 1, &m_localArrayR[m_height], 1);
+        double globalDotProductEps;
+        MPI_Allreduce(&localDotProductEps, &globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+
+        m_eps = sqrt(globalDotProductEps);
 
 
-        alpha = MPI_cblas_ddot(n, m_t, m_p);  // alpha = p_k^T A p_k
-        beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
-        alpha = beta / alpha;
+        // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayR[m_rstart], m_rl, MPI_DOUBLE, m_r, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayT[m_rstart], m_rl, MPI_DOUBLE, m_t, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayP[m_rstart], m_rl, MPI_DOUBLE, m_p, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayZ[m_rstart], m_rl, MPI_DOUBLE, m_z, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
-        MPI_cblas_daxpy(n, alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
-        MPI_cblas_daxpy(n, -alpha, m_t, m_r); // r_{k+1} = r_k - alpha_k A p_k
+        // m_alpha = MPI_cblas_ddot(n, m_t, m_p);  // alpha = p_k^T A p_k
+        // m_beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
+        // m_alpha = m_beta / m_alpha;
+
+        // MPI_cblas_daxpy(n, m_alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
+        // MPI_cblas_daxpy(n, -m_alpha, m_t, m_r); // r_{k+1} = r_k - alpha_k A p_k
 
 
-        eps = MPI_cblas_dnrm2(n, m_r);
+        // m_eps = MPI_cblas_dnrm2(n, m_r);
 
-        if (eps < tol*tol) {
+        if (m_eps < tol*tol) {
             break;
         }
 
-        MPI_Precondition(m_r, m_z);
-        beta = MPI_cblas_ddot(n, m_r, m_z) / beta;
+        // MPI_Precondition(m_r, m_z);
+        cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+        MPI_Allgatherv(&m_localArrayZ[m_rstart], m_rl, MPI_DOUBLE, m_z, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // m_beta = MPI_cblas_ddot(n, m_r, m_z) / m_beta;
+        double localDotProductTemp = cblas_ddot(m_width*m_height, &m_localArrayR[m_height], 1, &m_localArrayZ[m_height], 1);
+        
+        double globalDotProductTemp {};
+        MPI_Allreduce(&localDotProductTemp, &globalDotProductTemp, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+        m_beta = globalDotProductTemp / m_beta;
 
-        MPI_cblas_dcopy(n, m_z, m_t);
-        MPI_cblas_daxpy(n, beta, m_p, m_t);
-        MPI_cblas_dcopy(n, m_t, m_p);
+        // MPI_cblas_dcopy(n, m_z, m_t);
+        // cblas_dcopy(n, m_z, 1, m_t, 1);
+        cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayT, 1);
+
+        // MPI_cblas_daxpy(n, m_beta, m_p, m_t); //you could prbable use the tragular opeator there
+        cblas_daxpy(m_l, m_beta, m_localArrayP, 1, m_localArrayT, 1);
+
+        // MPI_cblas_dcopy(n, m_t, m_p);
+        cblas_dcopy(m_l, m_localArrayT, 1, m_localArrayP, 1);
+
+
+        if (m_solver_size > 1) {
+            MPI_Sendrecv(&m_localArrayP[m_height], m_height, MPI_DOUBLE, m_left, 0, &m_localArrayP[m_height*(m_width+1)], m_height, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
+            MPI_Sendrecv(&m_localArrayP[m_height*m_width], m_height, MPI_DOUBLE, m_right, 0, m_localArrayP, m_height, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
+        }
+        // MPI_Allgatherv(&m_localArrayR[m_rstart], m_rl, MPI_DOUBLE, m_r, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayT[m_rstart], m_rl, MPI_DOUBLE, m_t, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayP[m_rstart], m_rl, MPI_DOUBLE, m_p, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayZ[m_rstart], m_rl, MPI_DOUBLE, m_z, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
     } while (k < 5000); // Set a maximum number of iterations
 
@@ -124,11 +202,62 @@ SolverCG::Solve(double* b, double* x)
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
     m_k++;
+
+    MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+
     // if (m_rankCol == 0 && m_rankRow == 0) {
     //     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
     // }
     return SolverCGErrorCode::SUCCESS;
 }
+
+
+// void SolverCG::temp(double* m_p, double* m_t, double* m_r, double* m_z, double* x) 
+// {
+//     // Perform action of Nabla^2 * m_p
+//     // MPI_ApplyOperator(m_p, m_t);
+//     cblas_dscal(m_l, 0.0, m_localArray11, 1);
+//     cblas_dscal(m_l, 0.0, m_localArray22, 1);
+//     cblas_dscal(m_l, 0.0, m_localArray33, 1);
+//     cblas_dscal(m_l, 0.0, m_localArray44, 1);
+//     cblas_dscal(m_l, 0.0, m_localArray55, 1);
+//     MPI_Scatterv(m_p, m_ls, m_disp, MPI_DOUBLE, m_localArray11, m_l, MPI_DOUBLE, 0, m_solver_comm);
+//     MPI_Scatterv(m_t, m_ls, m_disp, MPI_DOUBLE, m_localArray22, m_l, MPI_DOUBLE, 0, m_solver_comm);
+//     MPI_Scatterv(m_r, m_ls, m_disp, MPI_DOUBLE, m_localArray44, m_l, MPI_DOUBLE, 0, m_solver_comm);
+//     MPI_Scatterv(m_z, m_ls, m_disp, MPI_DOUBLE, m_localArray55, m_l, MPI_DOUBLE, 0, m_solver_comm);
+//     MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArray33, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    
+//     // MPI_ApplyOperator(m_p, m_t);
+//     Laplace(m_localArray11, m_localArray22);
+
+//     // m_alpha = MPI_cblas_ddot(m_Nx*m_Ny, m_t, m_p);  // alpha = p_k^T A p_k
+//     // beta  = MPI_cblas_ddot(n, m_r, m_z);  // z_k^T r_k
+//     // alpha = beta / alpha;
+//     double localDotProductAplha = cblas_ddot(m_width*m_height, &m_localArray22[m_height], 1, &m_localArray11[m_height], 1);  // alpha = p_k^T A p_k
+//     double localDotProductBeta = cblas_ddot(m_width*m_height, &m_localArray44[m_height], 1, &m_localArray55[m_height], 1);  // alpha = p_k^T A p_k
+    
+//     MPI_Allreduce(&localDotProductAplha, &m_alpha, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+//     MPI_Allreduce(&localDotProductBeta, &m_beta, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+//     m_alpha = m_beta / m_alpha;
+
+//     // MPI_cblas_daxpy(m_width*m_height, m_alpha, m_p, x);  // x_{k+1} = x_k + alpha_k p_k
+//     // MPI_cblas_daxpy(m_width*m_height, -m_alpha, m_t, m_r); // r_{k+1} = r_k - alpha_k A p_k
+//     cblas_daxpy(m_width*m_height, m_alpha, &m_localArray11[m_height], 1, &m_localArray33[m_height], 1);
+//     cblas_daxpy(m_width*m_height, -m_alpha, &m_localArray22[m_height], 1, &m_localArray44[m_height], 1);
+
+//     // eps = MPI_cblas_dnrm2(n, m_r);
+//     double localDotProductEps = cblas_ddot(m_width*m_height, &m_localArray44[m_height], 1, &m_localArray44[m_height], 1);
+//     double globalDotProductEps;
+//     MPI_Allreduce(&localDotProductEps, &globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
+
+//     m_eps = sqrt(globalDotProductEps);
+
+
+//     MPI_Allgatherv(&m_localArray33[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+//     MPI_Allgatherv(&m_localArray44[m_rstart], m_rl, MPI_DOUBLE, m_r, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+
+//     MPI_Allgatherv(&(m_localArray22[m_rstart]), m_rl, MPI_DOUBLE, m_t, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+// }
 
 
 double 
@@ -138,10 +267,14 @@ SolverCG::MPI_cblas_ddot(const int m, const double* const x, const double* const
         return cblas_ddot(m, x, 1, y, 1);
     }
 
-    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
-    MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(y, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
 
-    double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray2, 1);
+    // double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray2, 1);
+    double localDotProduct = cblas_ddot(m_width*m_height, &m_localArrayP[m_height], 1, &m_localArrayT[m_height], 1);
+
 
     double globalDotProduct;
     MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
@@ -157,12 +290,17 @@ void SolverCG::MPI_cblas_daxpy(const int m, const double alpha, double* const x,
         return;
     }
 
-    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
-    MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(y, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(y, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
 
-    cblas_daxpy(m_localSize, alpha, m_localArray1, 1, m_localArray2, 1);
+    cblas_daxpy(m_width*m_height, alpha, &m_localArrayP[m_height], 1, &m_localArrayT[m_height], 1);
+    // cblas_daxpy(m_localSize, alpha, m_localArray1, 1, m_localArray2, 1);
 
-    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
+    // MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, y, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
+
+    MPI_Allgatherv(&m_localArrayT[m_rstart], m_rl, MPI_DOUBLE, y, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -188,9 +326,11 @@ SolverCG::MPI_cblas_dnrm2(const int m, const double* const x)
     if (!m_useMPI) {
         return cblas_dnrm2(m, x, 1);
     }
-    MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(x, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
 
-    double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray1, 1);
+    // double localDotProduct = cblas_ddot(m_localSize, m_localArray1, 1, m_localArray1, 1);
+    double localDotProduct = cblas_ddot(m_width*m_height, &m_localArrayT[m_height], 1, &m_localArrayT[m_height], 1);
 
     double globalDotProduct;
     MPI_Allreduce(&localDotProduct, &globalDotProduct, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
@@ -248,8 +388,11 @@ void SolverCG::SetSize(int size)
     m_l = m_width*m_height + 2*m_height;
     m_rl = m_rls[m_solver_rank];
 
-    m_localArray11 = new double[m_l](); // Local block of first vector
-    m_localArray22 = new double[m_l]();
+    m_localArrayP = new double[m_l](); // Local block of first vector
+    m_localArrayT = new double[m_l]();
+    m_localArrayX = new double[m_l]();
+    m_localArrayR = new double[m_l]();
+    m_localArrayZ = new double[m_l]();
 
     m_left = m_solver_rank - 1;
     m_right = m_solver_rank + 1;
@@ -294,10 +437,12 @@ void SolverCG::MPI_ApplyOperator(double* in, double* out)
         ApplyOperator(in, out);
         return;
     }
-    MPI_Scatterv(in, m_ls, m_disp, MPI_DOUBLE, m_localArray11, m_l, MPI_DOUBLE, 0, m_solver_comm);
-    MPI_Scatterv(out, m_ls, m_disp, MPI_DOUBLE, m_localArray22, m_l, MPI_DOUBLE, 0, m_solver_comm);
-    Laplace(m_localArray11, m_localArray22);
-    MPI_Allgatherv(&(m_localArray22[m_rstart]), m_rl, MPI_DOUBLE, out, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+    cblas_dcopy(m_l, m_localArrayX, 1, m_localArrayP, 1);
+    cblas_dcopy(m_l, m_localArrayX, 1, m_localArrayT, 1);
+    MPI_Scatterv(in, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(out, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    Laplace(m_localArrayP, m_localArrayT);
+    MPI_Allgatherv(&(m_localArrayT[m_rstart]), m_rl, MPI_DOUBLE, out, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
     return;
 } 
 
@@ -410,12 +555,16 @@ void SolverCG::MPI_Precondition(double* in, double* out)
         return;
     }
 
-    MPI_Scatterv(in, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
-    MPI_Scatterv(out, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(in, m_arrays, m_disp2, MPI_DOUBLE, m_localArray1, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(out, m_arrays, m_disp2, MPI_DOUBLE, m_localArray2, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(in, m_ls, m_disp, MPI_DOUBLE, m_localArrayP, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    MPI_Scatterv(out, m_ls, m_disp, MPI_DOUBLE, m_localArrayT, m_l, MPI_DOUBLE, 0, m_solver_comm);
 
-    cblas_dsbmv(CblasColMajor, CblasUpper, m_localSize, 0, 1.0, m_localPre, 1, m_localArray1, 1, 0.0, m_localArray2, 1);
+    // cblas_dsbmv(CblasColMajor, CblasUpper, m_localSize, 0, 1.0, m_localPre, 1, m_localArray1, 1, 0.0, m_localArray2, 1);
+    cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayP, 1, 0.0, m_localArrayT, 1);
 
-    MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
+    // MPI_Allgatherv(m_localArray2, m_localSize, MPI_DOUBLE, out, m_arrays, m_disp2, MPI_DOUBLE, m_solver_comm);
+    MPI_Allgatherv(&m_localArrayT[m_rstart], m_rl, MPI_DOUBLE, out, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
     return ;
 }
 
@@ -467,14 +616,45 @@ void SolverCG::SetCommunicator(MPI_Comm grid)
     delete[] ranks;
 
     SetSize(m_size);
-    DistributeMatrices();
+    CreateMatrices();
 }
 
-void SolverCG::DistributeMatrices() 
+void SolverCG::CreateMatrices() 
 {
-    m_localPre = new double[m_localSize];
+    double dx2i = 1.0/m_dx/m_dx;
+    double dy2i = 1.0/m_dy/m_dy;
+    double factor = 2.0*(dx2i + dy2i);
+
+    // int n {m_width*m_height};
+    if(m_localPre) {
+        delete[] m_localPre;
+    }
+    if(m_localBC) {
+        delete[] m_localBC;
+    }
+    m_localPre = new double[m_l];
+    // m_localPre = new double[m_localSize];
     m_localBC = new double[m_localSize];
-    MPI_Scatterv(m_pre, m_arrays, m_disp2, MPI_DOUBLE, m_localPre, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(m_pre, m_arrays, m_disp2, MPI_DOUBLE, m_localPre, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
+    for (int j {}; j < m_width+2; ++j) {
+        for (int i {}; i < m_height; ++i) {
+            if (m_start && j == 0) {
+                m_localPre[IDX(i, j)] = 1;
+            } else if (m_end && j == m_width + 1) {
+                m_localPre[IDX(i, j)] = 1;
+            } else if (i == 0 || i == m_height-1) {
+                m_localPre[IDX(i, j)] = 1;
+            } else {
+                m_localPre[IDX(i, j)] = 1./factor;
+            }   
+        }
+    }
+    // if (m_solver_rank == 3) {
+    //     for (int i {}; i < m_l; ++i) {
+    //         std::cout << m_localPre2[i] << " ";
+    //     }
+    //     std::cout << std::endl; 
+    // } 
     MPI_Scatterv(m_bc, m_arrays, m_disp2, MPI_DOUBLE, m_localBC, m_localSize, MPI_DOUBLE, 0, m_solver_comm);
 }
 
