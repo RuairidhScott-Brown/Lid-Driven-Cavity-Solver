@@ -10,15 +10,10 @@ enum class SolverCGErrorCode {
 class SolverCG
 {
 public:
-    SolverCG(int pNx, int pNy, double pdx, double pdy);
+    SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm = MPI_COMM_WORLD);
     ~SolverCG();
 
-    void SetCommunicator();
-    void SetRank(int rankRow, int rankCol);
-    void SetSubGridDimensions(int startNx, int endNx, int startNy, int endNy);
-    void CalculateSubGridDimensions();
-
-
+    // void SetCommunicator();
 
     SolverCGErrorCode Solve(double* b, double* x);
 
@@ -27,15 +22,8 @@ private:
     double m_dy     {};
     int m_Nx        {};
     int m_Ny        {};
-    double* m_r     {};
-    double* m_p     {};
-    double* m_z     {};
-    double* m_t     {};
-    double* m_t2    {};
-    double* m_pre   {};
-    double* m_bc    {};
-    double* m_localArray1 {}; // Local block of first vector
-    double* m_localArray2 {};
+
+
     double* m_localArrayP {}; // Local block of first vector
     double* m_localArrayT {};
     double* m_localArrayX {};
@@ -44,28 +32,13 @@ private:
     double* m_localArrayB {};
     double* m_localPre {};
     double* m_localBC {};
-    double* m_local {};
     int* m_disp {};
     int m_solver_rank {-1}; 
     int m_solver_size {-1};
 
-    MPI_Comm m_grid {};
     MPI_Comm m_solver_comm {};
 
-    int m_rankRow   {};
-    int m_rankCol   {};
-    int m_globalRank {};
-    int m_size      {};
-    int m_sizeX     {};
-    int m_startNx   {};
-    int m_startNy   {};
-    int m_endNx     {};
-    int m_endNy     {};
-    int m_localSize {};
-    int* m_arrays {};
-    int* m_disp2 {};
     int m_k {};
-    bool m_useMPI   {false};
     int m_height {};
     int m_width {};
     int* m_widths {};
@@ -95,18 +68,9 @@ private:
     void MPI_ImposeBC(double* out);
     void MPI_ApplyOperator(double* in, double* out);
     void Laplace(double* in, double* out);
-
-
-
-
-    
-
-
-
-
-
-
-    void SetSize(int size);
+    SolverCGErrorCode SolveWithMultipleRank(double* b, double* x);
+    SolverCGErrorCode SolveWithSingleRank(double* b, double* x);
+    void SetSize();
 
 };
 
