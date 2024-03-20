@@ -329,11 +329,11 @@ void SolverCG::SetSize()
     int smallWidthSize {(m_height-2) / m_solver_size};
     int remainder {(m_height-2) % m_solver_size};
 
-    m_widths = new int[m_solver_size];
-    m_ls = new int[m_solver_size];
-    m_rls = new int[m_solver_size];
-    m_disp = new int[m_solver_size];
-    m_rdisp = new int[m_solver_size];
+    m_widths = new int[m_solver_size]();
+    m_ls = new int[m_solver_size]();
+    m_rls = new int[m_solver_size]();
+    m_disp = new int[m_solver_size]();
+    m_rdisp = new int[m_solver_size]();
 
     int offset {};
     int roffset {};

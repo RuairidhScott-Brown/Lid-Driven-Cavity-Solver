@@ -128,11 +128,6 @@ void LidDrivenCavity::Integrate()
         Advance();
         m_k++;
     }
-    // if (m_rank == 0) {
-    //     std::cout << "After" << std::endl;
-    //     // print_matrix_row(m_tmp, 9);
-    //     print_vector(m_localArray1, m_l);
-    // }
     MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, m_vnew, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
     MPI_Allgatherv(&m_localArray1[m_rstart], m_rl, MPI_DOUBLE, m_s, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
     // if (m_rank == 0) {
@@ -231,7 +226,7 @@ void LidDrivenCavity::CleanUp()
         delete[] m_rls;
         delete[] m_disp;
         delete[] m_rdisp;
-        delete[] m_localArray1; // Local block of first vector
+        delete[] m_localArray1;
         delete[] m_localArray2;
         delete[] m_localArray3;
         delete[] m_localArray4;
@@ -309,7 +304,7 @@ void LidDrivenCavity::Advance()
     // }
     // // m_cg->Solve(m_localArray3, m_localArray1);
     // MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, m_vnew, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    MPI_Allgatherv(&m_localArray1[m_rstart], m_rl, MPI_DOUBLE, m_s, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
+    // MPI_Allgatherv(&m_localArray1[m_rstart], m_rl, MPI_DOUBLE, m_s, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
     // MPI_Scatterv(m_s, m_ls, m_disp, MPI_DOUBLE, m_localArray4, m_l, MPI_DOUBLE, 0, m_comm);
 
 
@@ -334,16 +329,16 @@ void LidDrivenCavity::Advance()
     // m_cg->Solve(m_vnew, m_s);
 }
 
-void LidDrivenCavity::MPI_V(double *s, double *v)
-{
-    MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
-    MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-    V(m_localArray1, m_localArray2);
-    // if (m_rank == 0 && m_k ==1) {
-    //     print_vector(m_localArray2, m_l);
-    // }
-    MPI_Allgatherv(&m_localArray2[m_rstart], m_rl, MPI_DOUBLE, v, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-}
+// void LidDrivenCavity::MPI_V(double *s, double *v)
+// {
+//     MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
+//     MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
+//     V(m_localArray1, m_localArray2);
+//     // if (m_rank == 0 && m_k ==1) {
+//     //     print_vector(m_localArray2, m_l);
+//     // }
+//     MPI_Allgatherv(&m_localArray2[m_rstart], m_rl, MPI_DOUBLE, v, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
+// }
 
 void LidDrivenCavity::V(double *s, double *v)
 {
@@ -376,22 +371,22 @@ void LidDrivenCavity::V(double *s, double *v)
     }
 }
 
-void LidDrivenCavity::MPI_TimeAdvance(double *s, double *v, double *v_new)
-{
-    // m_s, m_v, m_vtemp
-    // if (!m_useMPI) {
-    //     ApplyOperator(in, out);
-    //     return;
-    // }
-    // cblas_dcopy(m_l, m_localArray1, 1, m_localArrayP, 1);
-    // cblas_dcopy(m_l, m_localArrayX, 1, m_localArrayT, 1);
-    MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
-    MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-    MPI_Scatterv(v_new, m_ls, m_disp, MPI_DOUBLE, m_localArray3, m_l, MPI_DOUBLE, 0, m_comm);
-    TimeAdvance(m_localArray1, m_localArray2, m_localArray3);
-    MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, v_new, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    return;
-}
+// void LidDrivenCavity::MPI_TimeAdvance(double *s, double *v, double *v_new)
+// {
+//     // m_s, m_v, m_vtemp
+//     // if (!m_useMPI) {
+//     //     ApplyOperator(in, out);
+//     //     return;
+//     // }
+//     // cblas_dcopy(m_l, m_localArray1, 1, m_localArrayP, 1);
+//     // cblas_dcopy(m_l, m_localArrayX, 1, m_localArrayT, 1);
+//     MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
+//     MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
+//     MPI_Scatterv(v_new, m_ls, m_disp, MPI_DOUBLE, m_localArray3, m_l, MPI_DOUBLE, 0, m_comm);
+//     TimeAdvance(m_localArray1, m_localArray2, m_localArray3);
+//     MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, v_new, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
+//     return;
+// }
 
 void LidDrivenCavity::TimeAdvance(double *s, double *v, double *v_new)
 {
@@ -446,11 +441,11 @@ void LidDrivenCavity::SetSize()
     int smallWidthSize{(m_height - 2) / m_size};
     int remainder{(m_height - 2) % m_size};
 
-    m_widths = new int[m_size];
-    m_ls = new int[m_size];
-    m_rls = new int[m_size];
-    m_disp = new int[m_size];
-    m_rdisp = new int[m_size];
+    m_widths = new int[m_size]();
+    m_ls = new int[m_size]();
+    m_rls = new int[m_size]();
+    m_disp = new int[m_size]();
+    m_rdisp = new int[m_size]();
 
     int offset{};
     int roffset{};
@@ -478,15 +473,13 @@ void LidDrivenCavity::SetSize()
         m_rdisp[i] = roffset;
         m_ls[i] = m_widths[i] * m_height + 2 * m_height;
 
-        if (i == 0)
-        {
+        if (i == 0) {
             m_rls[i] = m_height;
             roffset += m_height;
         }
-        if (i == m_size - 1)
-        {
+        if (i == m_size - 1) {
             m_rls[i] += m_height;
-        }
+        }  
         m_rls[i] += m_widths[i] * m_height;
         roffset += (m_widths[i]) * m_height;
 
@@ -525,7 +518,6 @@ void LidDrivenCavity::SetSize()
     {
         m_rstart = m_height;
     }
-
     // MPI_Scatterv(m_s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
     // MPI_Scatterv(m_v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
     // MPI_Scatterv(m_vnew, m_ls, m_disp, MPI_DOUBLE, m_localArray3, m_l, MPI_DOUBLE, 0, m_comm);

@@ -209,27 +209,6 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity)
 {
     DefaultLidDrivenCavity dldc {};
 
-    int worldSize {};
-    int worldRank {};
-
-    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
-    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
-
-    MPI_Comm grid;
-    const int dims {2};
-    const int nAxisRanks {sqrt(worldSize)};
-    int sizes[dims] = {nAxisRanks, nAxisRanks};
-    int periods[dims] = {0, 1};
-    int reorder = 1;
-
-    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
-
-    int coords[dims];
-    int gridRank {};
-
-    MPI_Comm_rank(grid, &gridRank);
-    MPI_Cart_coords(grid, gridRank, dims, coords);
-
     LidDrivenCavity solver {LidDrivenCavity()};
 
     int n {dldc.Nx*dldc.Ny};
@@ -269,28 +248,7 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity2)
 {
     DefaultLidDrivenCavity dldc {};
 
-    int worldSize {};
-    int worldRank {};
-
-    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
-    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
-
-    MPI_Comm grid;
-    const int dims {2};
-    const int nAxisRanks {sqrt(worldSize)};
-    int sizes[dims] = {nAxisRanks, nAxisRanks};
-    int periods[dims] = {0, 1};
-    int reorder = 1;
-
-    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
-
-    int coords[dims];
-    int gridRank {};
-
-    MPI_Comm_rank(grid, &gridRank);
-    MPI_Cart_coords(grid, gridRank, dims, coords);
-
-    LidDrivenCavity solver {LidDrivenCavity()};
+    LidDrivenCavity solver {LidDrivenCavity(MPI_COMM_WORLD)};
 
     int n {20*20};
 
@@ -330,27 +288,6 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity3)
 {
     DefaultLidDrivenCavity dldc {};
 
-    int worldSize {};
-    int worldRank {};
-
-    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
-    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
-
-    MPI_Comm grid;
-    const int dims {2};
-    const int nAxisRanks {sqrt(worldSize)};
-    int sizes[dims] = {nAxisRanks, nAxisRanks};
-    int periods[dims] = {0, 1};
-    int reorder = 1;
-
-    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
-
-    int coords[dims];
-    int gridRank {};
-
-    MPI_Comm_rank(grid, &gridRank);
-    MPI_Cart_coords(grid, gridRank, dims, coords);
-
     LidDrivenCavity solver {LidDrivenCavity()};
 
     int n {10*10};
@@ -362,26 +299,26 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity3)
     solver.SetReynoldsNumber(dldc.Re);
 
     solver.Initialise();
-    // solver.Integrate();
+    solver.Integrate();
 
-    // double u[n] {};
-    // double v[n] {};
+    double u[n] {};
+    double v[n] {};
 
-    // const double* const vorticity {solver.GetVorticity()};
-    // const double* const streamFunction {solver.GetStreamFunction()};
+    const double* const vorticity {solver.GetVorticity()};
+    const double* const streamFunction {solver.GetStreamFunction()};
 
-    // solver.ConvertStreamFunctionToVelocityU(u);
-    // solver.ConvertStreamFunctionToVelocityV(v);
+    solver.ConvertStreamFunctionToVelocityU(u);
+    solver.ConvertStreamFunctionToVelocityV(v);
 
-    // std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
-    // std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
-    // std::string filePath = srcDir + "/data/default_solution_10_10_005.txt";
+    std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
+    std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
+    std::string filePath = srcDir + "/data/default_solution_10_10_005.txt";
 
-    // DefaultLidDrivenCavityData data {n};
-    // ReadDefaultDataFromFile(filePath, &data, 10, 10);
+    DefaultLidDrivenCavityData data {n};
+    ReadDefaultDataFromFile(filePath, &data, 10, 10);
 
-    // BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
-    // BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
-    // BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
-    // BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
+    BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
 }
