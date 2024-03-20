@@ -9,7 +9,7 @@ using namespace std;
 
 #include "../include/SolverCG.h"
 
-#define IDX(I,J) ((J)*m_Ny + (I))
+#define IDX(I,J) ((J)*m_Nx + (I))
 
 SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
 {
@@ -17,7 +17,7 @@ SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
     m_dy = pdy;
     m_Nx = pNx;
     m_Ny = pNy;
-    m_height = pNy;
+    m_height = pNx;
 
     m_solver_comm = comm;
 
@@ -112,7 +112,7 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
     cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_l, 0, m_localBC, 1, m_localArrayR, 1);
 
     cblas_daxpy(m_l, -1.0, m_localArrayT, 1, m_localArrayR, 1);
-    cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
     cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayP, 1); 
 
     do {
@@ -139,7 +139,7 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
             break;
         }
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+        cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
         localDotProductTemp = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1);
         
         MPI_Allreduce(&localDotProductTemp, &globalDotProductTemp, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
@@ -199,7 +199,7 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_l, 0, m_localBC, 1, m_localArrayR, 1);
 
     cblas_daxpy(m_l, -1.0, m_localArrayT, 1, m_localArrayR, 1);
-    cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
     cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayP, 1); 
 
     do {
@@ -220,7 +220,7 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
             break;
         }
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+        cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
     
         beta = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1) / beta;
 

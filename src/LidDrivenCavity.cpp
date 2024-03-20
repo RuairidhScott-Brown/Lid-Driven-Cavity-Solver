@@ -8,8 +8,8 @@ using namespace std;
 #include <cblas.h>
 #include <mpi.h>
 
-#define IDX(I, J) ((J)*m_Ny + (I))
-// #define IDX(I,J) ((J)*Nx + (I))
+// #define IDX(I, J) ((J)*m_Ny + (I))
+#define IDX(I,J) ((J)*m_Nx + (I))
 
 #include "../include/LidDrivenCavity.h"
 #include "../include/SolverCG.h"
@@ -434,7 +434,7 @@ LidDrivenCavity::GetNy()
 
 void LidDrivenCavity::SetSize()
 {
-    m_height = m_Ny;
+    m_height = m_Nx;
     MPI_Comm_rank(m_comm, &m_rank);
     MPI_Comm_size(m_comm, &m_size);
     m_sizeX = std::sqrt(m_size);
