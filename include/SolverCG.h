@@ -13,6 +13,8 @@ public:
     SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm = MPI_COMM_WORLD);
     ~SolverCG();
 
+    void UseMPI(bool yes);
+
     // void SetCommunicator();
 
     SolverCGErrorCode Solve(double* b, double* x);

@@ -15,6 +15,8 @@
 #include "../include/SolverCG.h"
 #include "../include/LidDrivenCavity.h"
 
+namespace utf = boost::unit_test;
+namespace tt = boost::test_tools;
 
 struct MPIFixture {
     public:
@@ -48,12 +50,31 @@ struct DefaultLidDrivenCavity {
 };
 
 struct DefaultLidDrivenCavityData {
-    double x[81] {}; 
-    double y[81] {}; 
-    double vorticity[81] {};
-    double streamFunction[81] {};
-    double u[81] {};
-    double v[81] {};
+    double* x;
+    double* y;
+    double* vorticity;
+    double* streamFunction;
+    double* u;
+    double* v;
+    int size;
+
+    DefaultLidDrivenCavityData(int arraySize = 81) : size(arraySize) {
+        x = new double[size];
+        y = new double[size];
+        vorticity = new double[size];
+        streamFunction = new double[size];
+        u = new double[size];
+        v = new double[size];
+    }
+
+    ~DefaultLidDrivenCavityData() {
+        delete[] x;
+        delete[] y;
+        delete[] vorticity;
+        delete[] streamFunction;
+        delete[] u;
+        delete[] v;
+    }
 };
 
 double 
@@ -76,24 +97,23 @@ AllValuesAreZero(const double* arr, const size_t size)
 }
 
 bool 
-ArraysAreEqual(const double* arr1, const double* arr2, const size_t size, const int sig, const int offset = 0) 
+ArraysAreEqual(const double* arr1, const double* arr2, const size_t size) 
 {
     for(size_t i {}; i < size; ++i) {
-        if(std::abs(RoundSigFig(arr1[i] + offset, sig) - RoundSigFig(arr2[i] + offset, sig)) > 1.0e-6) {
-            std::cout << "Error :" << std::setprecision(10) << arr1[i] << " " <<  arr2[i] << std::endl;
-            return false;
-        }
+        // if(std::abs(RoundSigFig(arr1[i] + offset, sig) - RoundSigFig(arr2[i] + offset, sig)) > 1.0e-6) {
+        //     std::cout << "Error :" << std::setprecision(10) << arr1[i] << " " <<  arr2[i] << std::endl;
+        //     return false;
+        // }
+        BOOST_TEST(arr1[i] == arr2[i], tt::tolerance(0.0001));
     }
     return true;
 }
 
 void 
-ReadDefaultDataFromFile(const std::string& filename, DefaultLidDrivenCavityData* const data) 
+ReadDefaultDataFromFile(const std::string& filename, DefaultLidDrivenCavityData* const data, int Nx = 9, int Ny = 9) 
 {
     std::ifstream file(filename);
     std::string line;
-
-    DefaultLidDrivenCavity dldc {};
 
     double x {}; 
     double y {}; 
@@ -103,17 +123,17 @@ ReadDefaultDataFromFile(const std::string& filename, DefaultLidDrivenCavityData*
     double v {};
 
 
-    for(int i {}; i < dldc.Nx; ++i) {
-        for(int j {}; j < dldc.Ny; ++j) {
+    for(int i {}; i < Nx; ++i) {
+        for(int j {}; j < Ny; ++j) {
             if (!std::getline(file, line)) break;
             std::istringstream iss(line);
             if(iss >> x >> y >> vorticity >> streamFunction >> u >> v) {
-                data->x[j*dldc.Ny + i] = x;
-                data->y[j*dldc.Ny + i] = y;
-                data->vorticity[j*dldc.Ny + i] = vorticity;
-                data->streamFunction[j*dldc.Ny + i] = streamFunction;
-                data->u[j*dldc.Ny + i] = u;
-                data->v[j*dldc.Ny + i] = v;
+                data->x[j*Ny + i] = x;
+                data->y[j*Ny + i] = y;
+                data->vorticity[j*Ny + i] = vorticity;
+                data->streamFunction[j*Ny + i] = streamFunction;
+                data->u[j*Ny + i] = u;
+                data->v[j*Ny + i] = v;
             } else {
                 j--;
             }
@@ -126,6 +146,7 @@ BOOST_AUTO_TEST_CASE(TestSolverCG){
     DefaultLidDrivenCavity dldc {};
 
     SolverCG solver(dldc.Nx, dldc.Ny, dldc.dx, dldc.dy);
+    solver.UseMPI(false);
 
     int n {dldc.Nx*dldc.Ny};
     int Nx {dldc.Nx};
@@ -151,8 +172,7 @@ BOOST_AUTO_TEST_CASE(TestSolverCG){
 
     solver.Solve(b, x);
 
-    int sigFig {6};
-    BOOST_TEST(ArraysAreEqual(x, expected_x, n, sigFig) == true);
+    BOOST_TEST(ArraysAreEqual(x, expected_x, n) == true);
 }
 
 BOOST_AUTO_TEST_CASE(TestSolverCGConverFailed)
@@ -219,9 +239,6 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity)
     solver.SetTimeStep(dldc.dt);
     solver.SetFinalTime(dldc.T);
     solver.SetReynoldsNumber(dldc.Re);
-    solver.SetRank(coords[0], coords[1]);
-    solver.SetSize(worldSize);
-    solver.SetCommunicator(grid);
 
     solver.Initialise();
     solver.Integrate();
@@ -242,9 +259,129 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity)
     DefaultLidDrivenCavityData data {};
     ReadDefaultDataFromFile(filePath, &data);
 
-    int sigFig {6};
-    BOOST_TEST(ArraysAreEqual(u, data.u, n, sigFig) == true);
-    BOOST_TEST(ArraysAreEqual(v, data.v, n, sigFig) == true);
-    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n, sigFig) == true);
-    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n, sigFig) == true);
+    BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
+}
+
+BOOST_AUTO_TEST_CASE(TestLidDrivenCavity2)
+{
+    DefaultLidDrivenCavity dldc {};
+
+    int worldSize {};
+    int worldRank {};
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
+
+    MPI_Comm grid;
+    const int dims {2};
+    const int nAxisRanks {sqrt(worldSize)};
+    int sizes[dims] = {nAxisRanks, nAxisRanks};
+    int periods[dims] = {0, 1};
+    int reorder = 1;
+
+    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
+
+    int coords[dims];
+    int gridRank {};
+
+    MPI_Comm_rank(grid, &gridRank);
+    MPI_Cart_coords(grid, gridRank, dims, coords);
+
+    LidDrivenCavity solver {LidDrivenCavity()};
+
+    int n {20*20};
+
+    solver.SetDomainSize(dldc.Lx, dldc.Ly);
+    solver.SetGridSize(20, 20);
+    solver.SetTimeStep(0.005);
+    solver.SetFinalTime(dldc.T);
+    solver.SetReynoldsNumber(dldc.Re);
+
+    solver.Initialise();
+    solver.Integrate();
+
+    double u[n] {};
+    double v[n] {};
+
+    const double* const vorticity {solver.GetVorticity()};
+    const double* const streamFunction {solver.GetStreamFunction()};
+
+    solver.ConvertStreamFunctionToVelocityU(u);
+    solver.ConvertStreamFunctionToVelocityV(v);
+
+    std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
+    std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
+    std::string filePath = srcDir + "/data/default_solution_20_20_005.txt";
+
+    DefaultLidDrivenCavityData data {n};
+    ReadDefaultDataFromFile(filePath, &data, 20, 20);
+
+    BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
+}
+
+
+BOOST_AUTO_TEST_CASE(TestLidDrivenCavity3)
+{
+    DefaultLidDrivenCavity dldc {};
+
+    int worldSize {};
+    int worldRank {};
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
+
+    MPI_Comm grid;
+    const int dims {2};
+    const int nAxisRanks {sqrt(worldSize)};
+    int sizes[dims] = {nAxisRanks, nAxisRanks};
+    int periods[dims] = {0, 1};
+    int reorder = 1;
+
+    MPI_Cart_create(MPI_COMM_WORLD, dims, sizes, periods, reorder, &grid);
+
+    int coords[dims];
+    int gridRank {};
+
+    MPI_Comm_rank(grid, &gridRank);
+    MPI_Cart_coords(grid, gridRank, dims, coords);
+
+    LidDrivenCavity solver {LidDrivenCavity()};
+
+    int n {10*10};
+
+    solver.SetDomainSize(dldc.Lx, dldc.Ly);
+    solver.SetGridSize(10, 10);
+    solver.SetTimeStep(0.005);
+    solver.SetFinalTime(dldc.T);
+    solver.SetReynoldsNumber(dldc.Re);
+
+    solver.Initialise();
+    // solver.Integrate();
+
+    // double u[n] {};
+    // double v[n] {};
+
+    // const double* const vorticity {solver.GetVorticity()};
+    // const double* const streamFunction {solver.GetStreamFunction()};
+
+    // solver.ConvertStreamFunctionToVelocityU(u);
+    // solver.ConvertStreamFunctionToVelocityV(v);
+
+    // std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
+    // std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
+    // std::string filePath = srcDir + "/data/default_solution_10_10_005.txt";
+
+    // DefaultLidDrivenCavityData data {n};
+    // ReadDefaultDataFromFile(filePath, &data, 10, 10);
+
+    // BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    // BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    // BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    // BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
 }

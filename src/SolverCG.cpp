@@ -21,12 +21,20 @@ SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
 
     m_solver_comm = comm;
 
-    MPI_Comm_rank(m_solver_comm, &m_solver_rank);
-    MPI_Comm_size(m_solver_comm, &m_solver_size);
+    UseMPI(true);
 
+}
+
+void SolverCG::UseMPI(bool yes) {
+    if (yes) {
+        MPI_Comm_rank(m_solver_comm, &m_solver_rank);
+        MPI_Comm_size(m_solver_comm, &m_solver_size);
+    } else {
+        m_solver_rank = 0;
+        m_solver_size = 1;
+    }
     SetSize();
     CreateMatrices();
-
 }
 
 
@@ -73,8 +81,10 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
     double localDotProductTemp {};
     double globalDotProductTemp {};
 
-    MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayX, m_l, MPI_DOUBLE, 0, m_solver_comm);
-    MPI_Scatterv(b, m_ls, m_disp, MPI_DOUBLE, m_localArrayB, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(x, m_ls, m_disp, MPI_DOUBLE, m_localArrayX, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    // MPI_Scatterv(b, m_ls, m_disp, MPI_DOUBLE, m_localArrayB, m_l, MPI_DOUBLE, 0, m_solver_comm);
+    m_localArrayX = x;
+    m_localArrayB = b;
 
     localDotProductEps = cblas_ddot(m_rl, &m_localArrayB[m_rstart], 1, &m_localArrayB[m_rstart], 1);
     MPI_Allreduce(&localDotProductEps, &globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
@@ -86,7 +96,9 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
         if (m_solver_rank == 0) {
             std::cout << "Norm is " << eps << std::endl;
         }
-        MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+        m_localArrayX = nullptr;
+        m_localArrayB = nullptr;
         return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
     }
 
@@ -145,16 +157,20 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
     } while (k < 5000); // Set a maximum number of iterations
 
     if (k == 5000) {
-        // cout << "FAILED TO CONVERGE" << endl;
+        std::cout << "FAILED TO CONVERGE" << std::endl;
+        m_localArrayX = nullptr;
+        m_localArrayB = nullptr;
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
     m_k++;
+    m_localArrayX = nullptr;
+    m_localArrayB = nullptr;
 
-    MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
+    // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
-    // if (m_rankCol == 0 && m_rankRow == 0) {
-    //     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
-    // }
+    if (m_solver_rank == 0) {
+        std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
+    }
     return SolverCGErrorCode::SUCCESS;
 }
 
@@ -215,16 +231,16 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     } while (k < 5000); // Set a maximum number of iterations
 
     if (k == 5000) {
-        // cout << "FAILED TO CONVERGE" << endl;
+        cout << "FAILED TO CONVERGE IN RANK: " << m_solver_rank <<  endl;
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
     m_k++;
 
     // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
-    // if (m_rankCol == 0 && m_rankRow == 0) {
-    //     cout << "Converged in " << k << " iterations. eps = " << eps << endl;
-    // }
+    if (m_solver_rank == 0) {
+        std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
+    }
     return SolverCGErrorCode::SUCCESS;
 }
 

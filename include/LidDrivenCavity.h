@@ -9,7 +9,7 @@ class SolverCG;
 class LidDrivenCavity
 {
 public:
-    LidDrivenCavity();
+    LidDrivenCavity(MPI_Comm comm = MPI_COMM_WORLD);
     ~LidDrivenCavity();
 
     void SetDomainSize(double xlen, double ylen);
@@ -17,9 +17,6 @@ public:
     void SetTimeStep(double deltat);
     void SetFinalTime(double finalt);
     void SetReynoldsNumber(double Re);
-    void SetRank(int rankRow, int rankCol);
-    void SetSize(int size);
-    void SetCommunicator(MPI_Comm grid);
 
     void Initialise();
     void Integrate();
@@ -63,17 +60,44 @@ private:
     double m_Re     {10};
     double m_U      {1.0};
     double m_nu     {0.1};
+    int m_k {};
 
     int m_rankRow    {};
     int m_rankCol    {};
+    int m_rank       {};
     int m_size       {};
     int m_sizeX      {};
 
+    int* m_widths {};
+    int* m_ls {};
+    int* m_rls {};
+    int* m_disp {};
+    int* m_rdisp {};
+    int m_height {};
+    int m_start {};
+    int m_end   {};
+    int m_width {};
+    int m_l {};
+    int m_rl {};
+    double* m_localArray1 {}; // Local block of first vector
+    double* m_localArray2 {};
+    double* m_localArray3 {};
+    double* m_localArray4 {};
+
+    int m_left {};
+    int m_right {};
+    int m_rstart {};
+
     SolverCG* m_cg {};
-    MPI_Comm m_grid {};
+    MPI_Comm m_comm {};
 
     void CleanUp();
     void UpdateDxDy();
     void Advance();
+    void SetSize();
+    void MPI_TimeAdvance(double* s, double* v, double* v_new);
+    void TimeAdvance(double* s, double* v, double* v_new);
+    void MPI_V(double* s, double* v);
+    void V(double* s, double* v);
 };
 

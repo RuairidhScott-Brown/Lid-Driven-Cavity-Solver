@@ -78,13 +78,10 @@ int main(int argc, char **argv)
     solver->SetTimeStep(vm["dt"].as<double>());
     solver->SetFinalTime(vm["T"].as<double>());
     solver->SetReynoldsNumber(vm["Re"].as<double>());
-    solver->SetRank(coords[0], coords[1]);
-    solver->SetSize(worldSize);
-    solver->SetCommunicator(grid);
 
-    // if (coords[0] == 0 && coords[1] == 0) {
-    //     solver->PrintConfiguration();
-    // }
+    if (coords[0] == 0 && coords[1] == 0) {
+        solver->PrintConfiguration();
+    }
 
     solver->Initialise();
 
