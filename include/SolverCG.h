@@ -12,6 +12,8 @@ class SolverCG
 public:
     SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm = MPI_COMM_WORLD);
     ~SolverCG();
+    void print_matrix_row_major(double* M, int r, int c);
+
 
     void UseMPI(bool yes);
 
@@ -24,6 +26,9 @@ private:
     double m_dy     {};
     int m_Nx        {};
     int m_Ny        {};
+    int m_localHeight {};
+    int m_length {};
+    int m_returnLength {};
 
 
     double* m_localArrayP {}; // Local block of first vector
@@ -34,7 +39,7 @@ private:
     double* m_localArrayB {};
     double* m_localPre {};
     double* m_localBC {};
-    int* m_disp {};
+    int* m_displacements {};
     int m_solver_rank {-1}; 
     int m_solver_size {-1};
 
@@ -43,17 +48,15 @@ private:
     int m_k {};
     int m_height {};
     int m_width {};
-    int* m_widths {};
-    int* m_ls {};
-    int* m_rls {};
-    int* m_rdisp {};
+    int* m_localHeights {};
+    int* m_lengths {};
+    int* m_returnLengths {};
+    int* m_returnDisplacements {};
     int m_end {};
     int m_start {};
-    int m_l {};
-    int m_rl {};
     int m_left {-1};
     int m_right {-1};
-    int m_rstart {};
+    int m_returnStart {};
 
 
     void ApplyOperator(double* p, double* t);

@@ -68,17 +68,18 @@ private:
     int m_size       {};
     int m_sizeX      {};
 
-    int* m_widths {};
-    int* m_ls {};
-    int* m_rls {};
-    int* m_disp {};
-    int* m_rdisp {};
+    int* m_localHeights {};
+    int* m_lengths {};
+    int* m_returnLengths {};
+    int* m_displacements {};
+    int* m_returnDisplacements {};
     int m_height {};
+    int m_width {};
     int m_start {};
     int m_end   {};
-    int m_width {};
-    int m_l {};
-    int m_rl {};
+    int m_localHeight {};
+    int m_length {};
+    int m_returnLength {};
     double* m_localArray1 {}; // Local block of first vector
     double* m_localArray2 {};
     double* m_localArray3 {};
@@ -86,7 +87,7 @@ private:
 
     int m_left {};
     int m_right {};
-    int m_rstart {};
+    int m_returnStart {};
 
     SolverCG* m_cg {};
     MPI_Comm m_comm {};

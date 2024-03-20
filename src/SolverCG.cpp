@@ -9,7 +9,21 @@ using namespace std;
 
 #include "../include/SolverCG.h"
 
-#define IDX(I,J) ((J)*m_Nx + (I))
+#define IDX(I,J) ((I)*m_Nx + (J))
+
+
+void 
+SolverCG::print_matrix_row_major(double* M, int r, int c) 
+{
+    std::cout << "[" << std::endl;
+    for(int i {}; i<r; i++){
+        for(int j {}; j<c; j++) {
+            std::cout << M[i*c + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "]" << std::endl;
+}
 
 SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
 {
@@ -17,7 +31,8 @@ SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
     m_dy = pdy;
     m_Nx = pNx;
     m_Ny = pNy;
-    m_height = pNx;
+    m_height = pNy;
+    m_width = pNx;
 
     m_solver_comm = comm;
 
@@ -48,11 +63,11 @@ SolverCG::~SolverCG()
     delete[] m_localArrayB;
     delete[] m_localPre;
     delete[] m_localBC;
-    delete[] m_widths;
-    delete[] m_ls;
-    delete[] m_rls;
-    delete[] m_rdisp;
-    delete[] m_disp;
+    delete[] m_localHeights;
+    delete[] m_lengths;
+    delete[] m_returnLengths;
+    delete[] m_returnDisplacements;
+    delete[] m_displacements;
 }
 
 
@@ -86,13 +101,13 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
     m_localArrayX = x;
     m_localArrayB = b;
 
-    localDotProductEps = cblas_ddot(m_rl, &m_localArrayB[m_rstart], 1, &m_localArrayB[m_rstart], 1);
+    localDotProductEps = cblas_ddot(m_returnLength, &m_localArrayB[m_returnStart], 1, &m_localArrayB[m_returnStart], 1);
     MPI_Allreduce(&localDotProductEps, &globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
 
     eps = sqrt(globalDotProductEps);
 
     if (eps < tol*tol) {
-        std::memset(m_localArrayX, 0, m_l*sizeof(double));
+        std::memset(m_localArrayX, 0, m_length*sizeof(double));
         if (m_solver_rank == 0) {
             std::cout << "Norm is " << eps << std::endl;
         }
@@ -104,33 +119,34 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
 
     Laplace(m_localArrayX, m_localArrayT);
 
-    MPI_Sendrecv(&m_localArrayT[m_height], m_height, MPI_DOUBLE, m_left, 0, &m_localArrayT[m_height*(m_width+1)], m_height, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
-    MPI_Sendrecv(&m_localArrayT[m_height*m_width], m_height, MPI_DOUBLE, m_right, 0, m_localArrayT, m_height, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
+
+    MPI_Sendrecv(&m_localArrayT[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArrayT[m_width*(m_localHeight+1)], m_width, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(&m_localArrayT[m_localHeight*m_width], m_width, MPI_DOUBLE, m_right, 0, m_localArrayT, m_width, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
     
 
-    cblas_dcopy(m_l, m_localArrayB, 1, m_localArrayR, 1);
-    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_l, 0, m_localBC, 1, m_localArrayR, 1);
+    cblas_dcopy(m_length, m_localArrayB, 1, m_localArrayR, 1);
+    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_length, 0, m_localBC, 1, m_localArrayR, 1);
 
-    cblas_daxpy(m_l, -1.0, m_localArrayT, 1, m_localArrayR, 1);
-    cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
-    cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayP, 1); 
+    cblas_daxpy(m_length, -1.0, m_localArrayT, 1, m_localArrayR, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+    cblas_dcopy(m_length, m_localArrayZ, 1, m_localArrayP, 1); 
 
     do {
         k++;
         
         Laplace(m_localArrayP, m_localArrayT);
 
-        localDotProductAplha = cblas_ddot(m_rl, &m_localArrayT[m_rstart], 1, &m_localArrayP[m_rstart], 1);
-        localDotProductBeta = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1);
+        localDotProductAplha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
+        localDotProductBeta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
         
         MPI_Allreduce(&localDotProductAplha, &alpha, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         MPI_Allreduce(&localDotProductBeta, &beta, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         alpha = beta / alpha;
 
-        cblas_daxpy(m_l, alpha, m_localArrayP, 1, m_localArrayX, 1);
-        cblas_daxpy(m_l, -alpha, m_localArrayT, 1, m_localArrayR, 1);
+        cblas_daxpy(m_length, alpha, m_localArrayP, 1, m_localArrayX, 1);
+        cblas_daxpy(m_length, -alpha, m_localArrayT, 1, m_localArrayR, 1);
 
-        localDotProductEps = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayR[m_rstart], 1);
+        localDotProductEps = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayR[m_returnStart], 1);
         MPI_Allreduce(&localDotProductEps, &globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
 
         eps = sqrt(globalDotProductEps);
@@ -139,25 +155,25 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
             break;
         }
 
-        cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
-        localDotProductTemp = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1);
+        cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+        localDotProductTemp = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
         
         MPI_Allreduce(&localDotProductTemp, &globalDotProductTemp, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         beta = globalDotProductTemp / beta;
 
-        cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayT, 1);
-        cblas_daxpy(m_l, beta, m_localArrayP, 1, m_localArrayT, 1);
-        cblas_dcopy(m_l, m_localArrayT, 1, m_localArrayP, 1);
+        cblas_dcopy(m_length, m_localArrayZ, 1, m_localArrayT, 1);
+        cblas_daxpy(m_length, beta, m_localArrayP, 1, m_localArrayT, 1);
+        cblas_dcopy(m_length, m_localArrayT, 1, m_localArrayP, 1);
 
 
-        MPI_Sendrecv(&m_localArrayP[m_height], m_height, MPI_DOUBLE, m_left, 0, &m_localArrayP[m_height*(m_width+1)], m_height, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(&m_localArrayP[m_height*m_width], m_height, MPI_DOUBLE, m_right, 0, m_localArrayP, m_height, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
+        MPI_Sendrecv(&m_localArrayP[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArrayP[m_width*(m_localHeight+1)], m_width, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
+        MPI_Sendrecv(&m_localArrayP[m_localHeight*m_width], m_width, MPI_DOUBLE, m_right, 0, m_localArrayP, m_width, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
 
 
     } while (k < 5000); // Set a maximum number of iterations
 
     if (k == 5000) {
-        std::cout << "FAILED TO CONVERGE" << std::endl;
+        // std::cout << "FAILED TO CONVERGE" << std::endl;
         m_localArrayX = nullptr;
         m_localArrayB = nullptr;
         return SolverCGErrorCode::CONVERGE_FAILED;
@@ -168,9 +184,9 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
 
     // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
-    if (m_solver_rank == 0) {
-        std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
-    }
+    // if (m_solver_rank == 0) {
+    //     std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
+    // }
     return SolverCGErrorCode::SUCCESS;
 }
 
@@ -183,64 +199,98 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     double eps {};
     double tol = 0.001;
 
-    eps = sqrt(cblas_ddot(m_l, b, 1, b, 1));
+    m_localArrayX = x;
+    m_localArrayB = b;
+
+    eps = sqrt(cblas_ddot(m_length, b, 1, b, 1));
 
     if (eps < tol*tol) {
-        std::memset(x, 0, m_l*sizeof(double));
+        std::memset(x, 0, m_length*sizeof(double));
         if (m_solver_rank == 0) {
             std::cout << "Norm is " << eps << std::endl;
         }
+        m_localArrayX = nullptr;
+        m_localArrayB = nullptr;
         return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
     }
+    
+    // print_matrix_row_major(x, m_Ny, m_Nx);
+    Laplace(x, m_localArrayT);
+    // print_matrix_row_major(x, m_Ny, m_Nx);
 
-    Laplace(x, m_localArrayT);    
+    cblas_dcopy(m_length, b, 1, m_localArrayR, 1);
+    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_length, 0, m_localBC, 1, m_localArrayR, 1);
+    // print_matrix_row_major(m_localArrayR, m_Ny, m_Nx);
 
-    cblas_dcopy(m_l, b, 1, m_localArrayR, 1);
-    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_l, 0, m_localBC, 1, m_localArrayR, 1);
-
-    cblas_daxpy(m_l, -1.0, m_localArrayT, 1, m_localArrayR, 1);
-    cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
-    cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayP, 1); 
-
+    cblas_daxpy(m_length, -1.0, m_localArrayT, 1, m_localArrayR, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+    cblas_dcopy(m_length, m_localArrayZ, 1, m_localArrayP, 1); 
+    // print_matrix_row_major(m_localArrayZ, m_Ny, m_Nx);
     do {
         k++;
-        
+        // if (k == 1) {
+        //     print_matrix_row_major(m_localArrayT, m_Ny, m_Nx);
+        // }
         Laplace(m_localArrayP, m_localArrayT);
+        // if (k == 1) {
+        //     print_matrix_row_major(m_localArrayT, m_Ny, m_Nx);
+        //     std::cout << m_returnLength << std::endl;
+        // }
 
-        alpha = cblas_ddot(m_rl, &m_localArrayT[m_rstart], 1, &m_localArrayP[m_rstart], 1);
-        beta = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1);
+        alpha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
+        // if (k == 1) {
+        //     std::cout << alpha << std::endl;
+
+        // }
+        beta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
         alpha = beta / alpha;
+        // if (k == 1) {
+        //     std::cout << alpha << std::endl;
+        //     std::cout << beta << std::endl;
 
-        cblas_daxpy(m_l, alpha, m_localArrayP, 1, x, 1);
-        cblas_daxpy(m_l, -alpha, m_localArrayT, 1, m_localArrayR, 1);
+        // }
 
-        eps = sqrt(cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayR[m_rstart], 1));
+        cblas_daxpy(m_length, alpha, m_localArrayP, 1, m_localArrayX, 1);
+        cblas_daxpy(m_length, -alpha, m_localArrayT, 1, m_localArrayR, 1);
+        // if (k == 1) {
+        //     print_matrix_row_major(m_localArrayR, m_Ny, m_Nx);
+        // }
+
+        eps = sqrt(cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayR[m_returnStart], 1));
 
         if (eps < tol*tol) {
             break;
         }
 
-        cblas_dsbmv(CblasRowMajor, CblasUpper, m_l, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
+        cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
     
-        beta = cblas_ddot(m_rl, &m_localArrayR[m_rstart], 1, &m_localArrayZ[m_rstart], 1) / beta;
+        beta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1) / beta;
 
-        cblas_dcopy(m_l, m_localArrayZ, 1, m_localArrayT, 1);
-        cblas_daxpy(m_l, beta, m_localArrayP, 1, m_localArrayT, 1);
-        cblas_dcopy(m_l, m_localArrayT, 1, m_localArrayP, 1);
+        cblas_dcopy(m_length, m_localArrayZ, 1, m_localArrayT, 1);
+        cblas_daxpy(m_length, beta, m_localArrayP, 1, m_localArrayT, 1);
+        cblas_dcopy(m_length, m_localArrayT, 1, m_localArrayP, 1);
 
     } while (k < 5000); // Set a maximum number of iterations
 
     if (k == 5000) {
-        cout << "FAILED TO CONVERGE IN RANK: " << m_solver_rank <<  endl;
+        // cout << "FAILED TO CONVERGE IN RANK: " << m_solver_rank <<  endl;
+        m_localArrayX = nullptr;
+        m_localArrayB = nullptr;
         return SolverCGErrorCode::CONVERGE_FAILED;
     }
+    // print_matrix_row_major(m_localArrayX, m_Ny, m_Nx);
+    // print_matrix_row_major(m_localArrayB, m_Ny, m_Nx);
+
     m_k++;
+    m_localArrayX = nullptr;
+    m_localArrayB = nullptr;
+    // print_matrix_row_major(m_localArrayX, m_Ny, m_Nx);
 
     // MPI_Allgatherv(&m_localArrayX[m_rstart], m_rl, MPI_DOUBLE, x, m_rls, m_rdisp, MPI_DOUBLE, m_solver_comm);
 
-    if (m_solver_rank == 0) {
-        std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
-    }
+    // if (m_solver_rank == 0) {
+    //     std::cout << "Converged in " << k << " iterations. eps = " << eps << std::endl;
+    // }
     return SolverCGErrorCode::SUCCESS;
 }
 
@@ -326,17 +376,17 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
 
 void SolverCG::SetSize()
 {    
-    int smallWidthSize {(m_height-2) / m_solver_size};
+    int smallHeightSize {(m_height-2) / m_solver_size};
     int remainder {(m_height-2) % m_solver_size};
 
-    m_widths = new int[m_solver_size]();
-    m_ls = new int[m_solver_size]();
-    m_rls = new int[m_solver_size]();
-    m_disp = new int[m_solver_size]();
-    m_rdisp = new int[m_solver_size]();
+    m_localHeights = new int[m_solver_size]();
+    m_lengths = new int[m_solver_size]();
+    m_returnLengths = new int[m_solver_size]();
+    m_displacements = new int[m_solver_size]();
+    m_returnDisplacements = new int[m_solver_size]();
 
     int offset {};
-    int roffset {};
+    int returnOffset {};
 
     if (m_solver_rank == 0) {
         m_start = 1;
@@ -346,38 +396,37 @@ void SolverCG::SetSize()
 
     for (int i {}; i < m_solver_size; ++i) {
         if (i < remainder) {
-            m_widths[i] = smallWidthSize + 1;
+            m_localHeights[i] = smallHeightSize + 1;
         } else {
-            m_widths[i] = smallWidthSize;
+            m_localHeights[i] = smallHeightSize;
         }
-        m_disp[i] = offset;
-        m_rdisp[i] = roffset;
-        m_ls[i] = m_widths[i]*m_height + 2*m_height;
+        m_displacements[i] = offset;
+        m_returnDisplacements[i] = returnOffset;
+        m_lengths[i] = m_localHeights[i]*m_width + 2*m_width;
 
         if (i == 0) {
-            m_rls[i] = m_widths[i]*m_height + m_height;
-            roffset += (m_widths[i])*m_height + m_height;
-        } else if (i == m_solver_size -1) {
-            m_rls[i] = m_widths[i]*m_height + m_height;
-            roffset += (m_widths[i])*m_height;
-        } else {
-            m_rls[i] = m_widths[i]*m_height;
-            roffset += (m_widths[i])*m_height;
+            m_returnLengths[i] += m_width;
+            returnOffset += m_width;
+        } 
+        if (i == m_solver_size -1) {
+            m_returnLengths[i] += m_width;
+        } 
 
-        }
-        offset += (m_widths[i])*m_height;
+        returnOffset += (m_localHeights[i])*m_width;
+        m_returnLengths[i] += m_localHeights[i]*m_width;
+        offset += (m_localHeights[i])*m_width;
     }
 
-    m_width = m_widths[m_solver_rank];
-    m_l = m_width*m_height + 2*m_height;
-    m_rl = m_rls[m_solver_rank];
+    m_localHeight = m_localHeights[m_solver_rank];
+    m_length = m_lengths[m_solver_rank];
+    m_returnLength = m_returnLengths[m_solver_rank];
 
-    m_localArrayP = new double[m_l](); // Local block of first vector
-    m_localArrayT = new double[m_l]();
-    m_localArrayX = new double[m_l]();
-    m_localArrayR = new double[m_l]();
-    m_localArrayZ = new double[m_l]();
-    m_localArrayB = new double[m_l]();
+    m_localArrayP = new double[m_length](); // Local block of first vector
+    m_localArrayT = new double[m_length]();
+    m_localArrayX = new double[m_length]();
+    m_localArrayR = new double[m_length]();
+    m_localArrayZ = new double[m_length]();
+    m_localArrayB = new double[m_length]();
 
     m_left = m_solver_rank - 1;
     m_right = m_solver_rank + 1;
@@ -388,9 +437,9 @@ void SolverCG::SetSize()
     }
 
     if (m_start) {
-        m_rstart = 0;
+        m_returnStart = 0;
     } else {
-        m_rstart = m_height;
+        m_returnStart = m_width;
     }
 }
 
@@ -417,14 +466,14 @@ void SolverCG::Laplace(double* in, double* out) {
     int jm1 = 0;
     int jp1 = 2;
 
-    for (int j = 1; j < m_width+1; ++j) {
-        for (int i = 1; i < m_height-1; ++i) {
-            out[IDX(i,j)] = ( -     in[IDX(i-1, j)]
+    for (int i = 1; i < m_localHeight+1; ++i) {
+        for (int j = 1; j < m_width-1; ++j) {
+            out[IDX(i,j)] = ( -     in[IDX(i, j-1)]
                               + 2.0*in[IDX(i,   j)]
-                              -     in[IDX(i+1, j)])*dx2i
-                          + ( -     in[IDX(i, jm1)]
+                              -     in[IDX(i, j+1)])*dx2i
+                          + ( -     in[IDX(jm1, j)]
                               + 2.0*in[IDX(i,   j)]
-                              -     in[IDX(i, jp1)])*dy2i;
+                              -     in[IDX(jp1, j)])*dy2i;
         }
         jm1++;
         jp1++;
@@ -598,15 +647,17 @@ void SolverCG::CreateMatrices()
     if(m_localBC) {
         delete[] m_localBC;
     }
-    m_localPre = new double[m_l];
-    m_localBC = new double[m_l];
-    for (int j {}; j < m_width+2; ++j) {
-        for (int i {}; i < m_height; ++i) {
-            if (m_start && j == 0) {
+
+    m_localPre = new double[m_length];
+    m_localBC = new double[m_length];
+
+    for (int i {}; i < m_localHeight+2; ++i) {
+        for (int j {}; j < m_width; ++j) {
+            if (m_start && i == 0) {
                 m_localPre[IDX(i, j)] = 1;
-            } else if (m_end && j == m_width + 1) {
+            } else if (m_end && i == m_localHeight + 1) {
                 m_localPre[IDX(i, j)] = 1;
-            } else if (i == 0 || i == m_height-1) {
+            } else if (j == 0 || j == m_width-1) {
                 m_localPre[IDX(i, j)] = 1;
             } else {
                 m_localPre[IDX(i, j)] = 1./factor;
@@ -614,13 +665,13 @@ void SolverCG::CreateMatrices()
         }
     }
 
-    for (int j {}; j < m_width+2; ++j) {
-        for (int i {}; i < m_height; ++i) {
-            if (m_start && j == 0) {
+    for (int i {}; i < m_localHeight+2; ++i) {
+        for (int j {}; j < m_width; ++j) {
+            if (m_start && i == 0) {
                 m_localBC[IDX(i, j)] = 0;
-            } else if (m_end && j == m_width + 1) {
+            } else if (m_end && i == m_localHeight + 1) {
                 m_localBC[IDX(i, j)] = 0;
-            } else if (i == 0 || i == m_height-1) {
+            } else if (j == 0 || j == m_width-1) {
                 m_localBC[IDX(i, j)] = 0;
             } else {
                 m_localBC[IDX(i, j)] = 1;

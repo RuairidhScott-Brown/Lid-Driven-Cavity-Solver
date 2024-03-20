@@ -123,19 +123,19 @@ ReadDefaultDataFromFile(const std::string& filename, DefaultLidDrivenCavityData*
     double v {};
 
 
-    for(int i {}; i < Nx; ++i) {
-        for(int j {}; j < Ny; ++j) {
+    for(int j {}; j < Nx; ++j) {
+        for(int i {}; i < Ny; ++i) {
             if (!std::getline(file, line)) break;
             std::istringstream iss(line);
             if(iss >> x >> y >> vorticity >> streamFunction >> u >> v) {
-                data->x[j*Ny + i] = x;
-                data->y[j*Ny + i] = y;
-                data->vorticity[j*Ny + i] = vorticity;
-                data->streamFunction[j*Ny + i] = streamFunction;
-                data->u[j*Ny + i] = u;
-                data->v[j*Ny + i] = v;
+                data->x[i*Nx + i] = x;
+                data->y[i*Nx + j] = y;
+                data->vorticity[i*Nx + j] = vorticity;
+                data->streamFunction[i*Nx + j] = streamFunction;
+                data->u[i*Nx + j] = u;
+                data->v[i*Nx + j] = v;
             } else {
-                j--;
+                i--;
             }
         }
     }
@@ -316,6 +316,84 @@ BOOST_AUTO_TEST_CASE(TestLidDrivenCavity3)
 
     DefaultLidDrivenCavityData data {n};
     ReadDefaultDataFromFile(filePath, &data, 10, 10);
+
+    BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
+}
+
+BOOST_AUTO_TEST_CASE(TestLidDrivenCavity4)
+{
+    DefaultLidDrivenCavity dldc {};
+
+    LidDrivenCavity solver {LidDrivenCavity()};
+
+    int n {13*9};
+
+    solver.SetDomainSize(dldc.Lx, dldc.Ly);
+    solver.SetGridSize(13, 9);
+    solver.SetTimeStep(0.005);
+    solver.SetFinalTime(dldc.T);
+    solver.SetReynoldsNumber(dldc.Re);
+
+    solver.Initialise();
+    solver.Integrate();
+
+    double u[n] {};
+    double v[n] {};
+
+    const double* const vorticity {solver.GetVorticity()};
+    const double* const streamFunction {solver.GetStreamFunction()};
+
+    solver.ConvertStreamFunctionToVelocityU(u);
+    solver.ConvertStreamFunctionToVelocityV(v);
+
+    std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
+    std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
+    std::string filePath = srcDir + "/data/default_solution_13_9_005.txt";
+
+    DefaultLidDrivenCavityData data {n};
+    ReadDefaultDataFromFile(filePath, &data, 13, 9);
+
+    BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
+    BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
+    BOOST_TEST(ArraysAreEqual(vorticity, data.vorticity, n) == true);
+    BOOST_TEST(ArraysAreEqual(streamFunction, data.streamFunction, n) == true);
+}
+
+BOOST_AUTO_TEST_CASE(TestLidDrivenCavity5)
+{
+    DefaultLidDrivenCavity dldc {};
+
+    LidDrivenCavity solver {LidDrivenCavity()};
+
+    int n {9*13};
+
+    solver.SetDomainSize(dldc.Lx, dldc.Ly);
+    solver.SetGridSize(9, 13);
+    solver.SetTimeStep(0.005);
+    solver.SetFinalTime(dldc.T);
+    solver.SetReynoldsNumber(dldc.Re);
+
+    solver.Initialise();
+    solver.Integrate();
+
+    double u[n] {};
+    double v[n] {};
+
+    const double* const vorticity {solver.GetVorticity()};
+    const double* const streamFunction {solver.GetStreamFunction()};
+
+    solver.ConvertStreamFunctionToVelocityU(u);
+    solver.ConvertStreamFunctionToVelocityV(v);
+
+    std::string srcPath = std::experimental::filesystem::canonical(__FILE__).string();
+    std::string srcDir = srcPath.substr(0, srcPath.find_last_of("/\\"));
+    std::string filePath = srcDir + "/data/default_solution_9_13_005.txt";
+
+    DefaultLidDrivenCavityData data {n};
+    ReadDefaultDataFromFile(filePath, &data, 9, 13);
 
     BOOST_TEST(ArraysAreEqual(u, data.u, n) == true);
     BOOST_TEST(ArraysAreEqual(v, data.v, n) == true);
