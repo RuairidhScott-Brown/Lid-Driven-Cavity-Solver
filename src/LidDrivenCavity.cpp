@@ -84,9 +84,9 @@ void LidDrivenCavity::Integrate()
 
     for (int t = 0; t < NSteps; ++t) {
         if (m_rank == 0) {
-            std::cout << "Step: " << setw(8) << t
-                    << "  Time: " << setw(8) << t*m_dt
-                    << std::endl;
+            // std::cout << "Step: " << setw(8) << t
+            //         << "  Time: " << setw(8) << t*m_dt
+            //         << std::endl;
         }
         Advance();
         m_k++;
@@ -234,10 +234,23 @@ void LidDrivenCavity::Advance()
 
 void LidDrivenCavity::V(double *s, double *v)
 {
+    int i;
+    int j;
 
-    for (int i = 1; i < m_localHeightPlusOne; ++i) {
-        v[IDX(i, 0)] = m_2dx2i * (s[IDX(i, 0)] - s[IDX(i, 1)]);
-        v[IDX(i, m_widthMinusOne)] = m_2dx2i * (s[IDX(i, m_widthMinusOne)] - s[IDX(i, m_widthMinusOne-1)]);
+    #pragma omp parallel shared(s, v, m_2dx2i, m_widthMinusOne, m_localHeightPlusOne) private(i)
+    {
+        # pragma omp sections nowait
+        {
+            #pragma omp section
+            for (int i = 1; i < m_localHeightPlusOne; ++i) {
+                v[IDX(i, 0)] = m_2dx2i * (s[IDX(i, 0)] - s[IDX(i, 1)]);
+            }
+
+            #pragma omp section
+            for (int i = 1; i < m_localHeightPlusOne; ++i) {
+                v[IDX(i, m_widthMinusOne)] = m_2dx2i * (s[IDX(i, m_widthMinusOne)] - s[IDX(i, m_widthMinusOne-1)]);
+            }
+        }
     }
 
     if (m_rank == 0) {
@@ -253,6 +266,7 @@ void LidDrivenCavity::V(double *s, double *v)
     }
 
     // Compute interior vorticity
+    # pragma omp parallel for shared(s, v, m_localHeightPlusOne, m_widthMinusOne, m_dy2i, m_dx2i) private(i, j)
     for (int i = 1; i < m_localHeightPlusOne; ++i) {
         for (int j = 1; j < m_widthMinusOne; ++j) {
             double term1 = 2.0 * s[IDX(i, j)];
@@ -265,6 +279,9 @@ void LidDrivenCavity::V(double *s, double *v)
 
 void LidDrivenCavity::TimeAdvance(double *s, double *v, double *v_new)
 {
+    int i;
+    int j;
+    # pragma omp parallel for shared(s, v, v_new, m_localHeightPlusOne, m_widthMinusOne, m_dyi, m_dxi, m_nu, m_dt) private(i, j)
     for (int i = 1; i < m_localHeightPlusOne; ++i) {
         for (int j = 1; j < m_widthMinusOne; ++j) {
             double term1 = v[IDX(i+1,j)];

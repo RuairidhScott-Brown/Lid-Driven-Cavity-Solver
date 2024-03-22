@@ -203,12 +203,31 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
 
         Laplace(m_localArrayP, m_localArrayT);
 
-        m_alpha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
-        m_beta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
+        #pragma omp parallel shared(m_localArrayP, m_localArrayT, m_localArrayR, m_localArrayZ, m_returnLength)
+        {
+            # pragma omp sections nowait
+            {
+                #pragma omp section
+                m_alpha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
+
+                #pragma omp section
+                m_beta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
+            }
+        }
         m_alpha = m_beta / m_alpha;
 
-        cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
-        cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+
+        #pragma omp parallel shared(m_localArrayP, m_localArrayT, m_localArrayR, m_localArrayX, m_alpha)
+        {
+            # pragma omp sections nowait
+            {
+                #pragma omp section
+                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
+
+                #pragma omp section
+                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+            }
+        }
 
         m_eps = sqrt(cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayR[m_returnStart], 1));
 
@@ -235,9 +254,9 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     m_localArrayX = nullptr;
     m_localArrayB = nullptr;
 
-    if (m_solver_rank == 0) {
-        std::cout << "Converged in " << m_k << " iterations. eps = " << m_eps << std::endl;
-    }
+    // if (m_solver_rank == 0) {
+    //     std::cout << "Converged in " << m_k << " iterations. eps = " << m_eps << std::endl;
+    // }
     return SolverCGErrorCode::SUCCESS;
 }
 
@@ -317,6 +336,9 @@ void SolverCG::SetSize()
 
 void SolverCG::Laplace(double* in, double* out) {
     // Assume ordered with y-direction fastest (column-by-column)
+    int i;
+    int j;
+    # pragma omp parallel for shared(m_localArrayP, m_localArrayT, m_dx2i, m_dy2i, m_localHeightPlusOne, m_widthMinusOne) private(i,j)
     for (int i = 1; i <m_localHeightPlusOne; ++i) {
         for (int j = 1; j < m_widthMinusOne; ++j) {
             double term1 = 2.0 * in[IDX(i, j)];
