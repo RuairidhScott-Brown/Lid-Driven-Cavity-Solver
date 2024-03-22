@@ -155,15 +155,33 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
         
         Laplace(m_localArrayP, m_localArrayT);
 
-        m_localDotProductAplha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
-        m_localDotProductBeta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
+        #pragma omp parallel shared(m_localArrayP, m_localArrayT, m_localArrayR, m_localArrayZ, m_returnLength)
+        {
+            # pragma omp sections nowait
+            {
+                #pragma omp section
+                m_localDotProductAplha = cblas_ddot(m_returnLength, &m_localArrayT[m_returnStart], 1, &m_localArrayP[m_returnStart], 1);
+                
+                #pragma omp section
+                m_localDotProductBeta = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayZ[m_returnStart], 1);
+            }
+        }
         
         MPI_Allreduce(&m_localDotProductAplha, &m_alpha, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         MPI_Allreduce(&m_localDotProductBeta, &m_beta, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
         m_alpha = m_beta / m_alpha;
 
-        cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
-        cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+        #pragma omp parallel shared(m_localArrayP, m_localArrayT, m_localArrayR, m_localArrayX, m_alpha)
+        {
+            # pragma omp sections nowait
+            {
+                #pragma omp section
+                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
+
+                #pragma omp section
+                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+            }
+        }
 
         m_localDotProductEps = cblas_ddot(m_returnLength, &m_localArrayR[m_returnStart], 1, &m_localArrayR[m_returnStart], 1);
         MPI_Allreduce(&m_localDotProductEps, &m_globalDotProductEps, 1, MPI_DOUBLE, MPI_SUM, m_solver_comm);
