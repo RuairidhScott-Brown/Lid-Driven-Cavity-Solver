@@ -15,39 +15,17 @@ using namespace std;
 #include "../include/SolverCG.h"
 
 
-void 
-print_matrix_row_major(double* M, int r, int c) 
-{
-    std::cout << "[" << std::endl;
-    for(int i {}; i<r; i++){
-        for(int j {}; j<c; j++) {
-            std::cout << M[i*c + j] << " ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "]" << std::endl;
-}
-
-
-void print_vector(const double *V, int l)
-{
-    for (int i{}; i < l; i++)
-    {
-        std::cout << V[i] << " ";
-    }
-    std::cout << std::endl;
-}
-
-
 LidDrivenCavity::LidDrivenCavity(MPI_Comm comm)
 {
     m_comm = comm;
 }
 
+
 LidDrivenCavity::~LidDrivenCavity()
 {
     CleanUp();
 }
+
 
 void LidDrivenCavity::SetDomainSize(double xlen, double ylen)
 {
@@ -56,6 +34,7 @@ void LidDrivenCavity::SetDomainSize(double xlen, double ylen)
     UpdateDxDy();
 }
 
+
 void LidDrivenCavity::SetGridSize(int nx, int ny)
 {
     m_Nx = nx;
@@ -63,21 +42,25 @@ void LidDrivenCavity::SetGridSize(int nx, int ny)
     UpdateDxDy();
 }
 
+
 void LidDrivenCavity::SetTimeStep(double deltat)
 {
     m_dt = deltat;
 }
+
 
 void LidDrivenCavity::SetFinalTime(double finalt)
 {
     m_T = finalt;
 }
 
+
 void LidDrivenCavity::SetReynoldsNumber(double re)
 {
     m_Re = re;
     m_nu = 1.0 / re;
 }
+
 
 void LidDrivenCavity::Initialise()
 {
@@ -94,27 +77,24 @@ void LidDrivenCavity::Initialise()
     SetSize();
 }
 
+
 void LidDrivenCavity::Integrate()
 {
     int NSteps = ceil(m_T / m_dt);
 
     for (int t = 0; t < NSteps; ++t) {
         if (m_rank == 0) {
-        //     std::cout << "Step: " << setw(8) << t
-        //             << "  Time: " << setw(8) << t*m_dt
-        //             << std::endl;
+            std::cout << "Step: " << setw(8) << t
+                    << "  Time: " << setw(8) << t*m_dt
+                    << std::endl;
         }
         Advance();
         m_k++;
     }
     MPI_Allgatherv(&m_localArray3[m_returnStart], m_returnLength, MPI_DOUBLE, m_vnew, m_returnLengths, m_returnDisplacements, MPI_DOUBLE, m_comm);
     MPI_Allgatherv(&m_localArray1[m_returnStart], m_returnLength, MPI_DOUBLE, m_s, m_returnLengths, m_returnDisplacements, MPI_DOUBLE, m_comm);
-    // if (m_rank == 0) {
-    //     std::cout << "After" << std::endl;
-    //     print_matrix_row(m_s, 9);
-    //     // print_vector(m_localArray1, m_l);
-    // }
 }
+
 
 void LidDrivenCavity::ConvertStreamFunctionToVelocityU(double *const u)
 {
@@ -128,6 +108,7 @@ void LidDrivenCavity::ConvertStreamFunctionToVelocityU(double *const u)
     }
 }
 
+
 void LidDrivenCavity::ConvertStreamFunctionToVelocityV(double *const v)
 {
     for (int j = 1; j < m_Nx - 1; ++j) {
@@ -137,11 +118,12 @@ void LidDrivenCavity::ConvertStreamFunctionToVelocityV(double *const v)
     }
 }
 
+
 void LidDrivenCavity::WriteSolution(std::string file)
 {
     std::cout << std::fixed << std::setprecision(6);
 
-    if (m_rankRow != 0 || m_rankCol != 0)
+    if (m_rank != 0)
         return;
 
     
@@ -169,6 +151,7 @@ void LidDrivenCavity::WriteSolution(std::string file)
     delete[] u1;
 }
 
+
 void LidDrivenCavity::PrintConfiguration()
 {
     cout << "Grid size: " << m_Nx << " x " << m_Ny << endl;
@@ -188,6 +171,7 @@ void LidDrivenCavity::PrintConfiguration()
         exit(-1);
     }
 }
+
 
 void LidDrivenCavity::CleanUp()
 {
@@ -212,232 +196,99 @@ void LidDrivenCavity::CleanUp()
     }
 }
 
+
 void LidDrivenCavity::UpdateDxDy()
 {
     m_dx = m_Lx / (m_Nx - 1);
     m_dy = m_Ly / (m_Ny - 1);
     m_Npts = m_Nx * m_Ny;
+    m_dxi = 1.0 / m_dx;
+    m_dyi = 1.0 / m_dy;
+    m_dx2i = 1.0 / m_dx / m_dx;
+    m_dy2i = 1.0 / m_dy / m_dy;
+    m_2dx2i = 2.0 * m_dx2i;
+    m_2dy2i = 2.0 * m_dy2i;
 }
+
 
 void LidDrivenCavity::Advance()
 {
 
-    // std::memset(m_v, 0, m_Nx*m_Ny*sizeof(double));
-    // std::memset(m_vnew, 0, m_Nx*m_Ny*sizeof(double));
-    // std::memset(m_vtemp, 0, m_Nx*m_Ny*sizeof(double));
-
-    // MPI_Scatterv(m_s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
-
-    // if (m_k == 51 && m_rank == 3) {
-    //     std::cout << "After2" << std::endl;
-    //     // print_matrix_row(m_s, 9);
-    //     print_vector(m_localArray1, m_l);
-    // }
-    // MPI_Scatterv(m_v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-    // MPI_Scatterv(m_vnew, m_ls, m_disp, MPI_DOUBLE, m_localArray3, m_l, MPI_DOUBLE, 0, m_comm);
-
     V(m_localArray1, m_localArray2);
 
-    // if (m_k == 0) {
-    //     print_matrix_row_major(m_localArray2, m_Ny, m_Nx);
-    // }
-    // // MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, m_vnew, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // // MPI_Allgatherv(&m_localArray2[m_rstart], m_rl, MPI_DOUBLE, m_v, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // // MPI_Scatterv(m_v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-    // // if (m_k == 0 && m_rank == 3) {
-    // //     std::cout << "before" << std::endl;
-    // //     print_vector(m_localArray2, m_l);
-    // // }
-
-    // // MPI_Allgatherv(&m_localArray2[m_rstart], m_rl, MPI_DOUBLE, m_v, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // // MPI_Scatterv(m_v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
     if (m_size > 1) {
         MPI_Sendrecv(&m_localArray2[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArray2[m_width * (m_localHeight + 1)], m_width, MPI_DOUBLE, m_right, 0, m_comm, MPI_STATUS_IGNORE);
         MPI_Sendrecv(&m_localArray2[m_localHeight * m_width], m_width, MPI_DOUBLE, m_right, 0, m_localArray2, m_width, MPI_DOUBLE, m_left, 0, m_comm, MPI_STATUS_IGNORE);
     }
 
-    // if (m_k == 1 && m_rank == 0) {
-    //     std::cout << "before" << std::endl;
-    //     print_matrix_row(m_v, 9);
-    // }
-
-    // V(m_s, m_v);
-
-    // if (m_k == 1 && m_rank == 0) {
-    //     std::cout << "After" << std::endl;
-    //     print_matrix_row(m_v, 9);
-    // }
-    // MPI_TimeAdvance(m_s, m_v, m_vnew);
-
-    // if (m_k == 0) {
-    //     print_matrix_row_major(m_localArray2, m_Ny, m_Nx);
-    // }
     TimeAdvance(m_localArray1, m_localArray2, m_localArray3);
-    // if (m_k == 0) {
-    //     print_matrix_row_major(m_localArray1, m_Ny, m_Nx);
-    // }
-    // MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, m_vnew, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // MPI_Allgatherv(&m_localArray1[m_rstart], m_rl, MPI_DOUBLE, m_s, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
 
     if (m_size > 1) {
         MPI_Sendrecv(&m_localArray3[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArray3[m_width*(m_localHeight+1)], m_width, MPI_DOUBLE, m_right, 0, m_comm, MPI_STATUS_IGNORE);
         MPI_Sendrecv(&m_localArray3[m_localHeight*m_width], m_width, MPI_DOUBLE, m_right, 0, m_localArray3, m_width, MPI_DOUBLE, m_left, 0, m_comm, MPI_STATUS_IGNORE);
     }
-    // // Solve Poisson problem
-    // m_cg->Solve(m_vnew, m_localArray1);
 
-    // if (m_k == 0) {
-    //     print_matrix_row_major(m_localArray3, m_Ny, m_Nx);
-    // }
     m_cg->Solve(m_localArray3, m_localArray1);
-    // print_matrix_row_major(m_localArray1, m_Ny, m_Nx);
-
-    // if (m_k == 0) {
-    //     print_matrix_row_major(m_localArray1, m_Ny, m_Nx);
-    // }
-    // if (m_size > 1) {
-    //     MPI_Sendrecv(&m_localArray2[m_height], m_height, MPI_DOUBLE, m_left, 0, &m_localArray2[m_height*(m_width+1)], m_height, MPI_DOUBLE, m_right, 0, m_comm, MPI_STATUS_IGNORE);
-    //     MPI_Sendrecv(&m_localArray2[m_height*m_width], m_height, MPI_DOUBLE, m_right, 0, m_localArray2, m_height, MPI_DOUBLE, m_left, 0, m_comm, MPI_STATUS_IGNORE);
-    // }
-    // // m_cg->Solve(m_localArray3, m_localArray1);
-    // MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, m_vnew, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // MPI_Allgatherv(&m_localArray1[m_rstart], m_rl, MPI_DOUBLE, m_s, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-    // MPI_Scatterv(m_s, m_ls, m_disp, MPI_DOUBLE, m_localArray4, m_l, MPI_DOUBLE, 0, m_comm);
-
-
-    // if (m_rank == 3) {
-    //     // std::cout << "After" << std::endl;
-    //     // print_matrix_row(m_tmp, 9);
-    //     print_vector(m_localArray1, m_l);
-    // }
-    //     if (m_k == 50 && m_rank == 3) {
-    //     std::cout << "After2" << std::endl;
-    //     // print_matrix_row(m_s, 9);
-    //     print_vector(m_localArray1, m_l);
-    // }
-    // MPI_V(m_s, m_v);
-    // MPI_TimeAdvance(m_s, m_v, m_vnew);
-    // if (m_size > 1) {
-    //     MPI_Sendrecv(&m_localArray1[m_height], m_height, MPI_DOUBLE, m_left, 0, &m_localArray1[m_height*(m_width+1)], m_height, MPI_DOUBLE, m_right, 0, m_comm, MPI_STATUS_IGNORE);
-    //     MPI_Sendrecv(&m_localArray1[m_height*m_width], m_height, MPI_DOUBLE, m_right, 0, m_localArray1, m_height, MPI_DOUBLE, m_left, 0, m_comm, MPI_STATUS_IGNORE);
-    // }
-
-    // Solve Poisson problem
-    // m_cg->Solve(m_vnew, m_s);
 }
 
-// void LidDrivenCavity::MPI_V(double *s, double *v)
-// {
-//     MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
-//     MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-//     V(m_localArray1, m_localArray2);
-//     // if (m_rank == 0 && m_k ==1) {
-//     //     print_vector(m_localArray2, m_l);
-//     // }
-//     MPI_Allgatherv(&m_localArray2[m_rstart], m_rl, MPI_DOUBLE, v, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-// }
 
 void LidDrivenCavity::V(double *s, double *v)
 {
-    double dyi = 1.0 / m_dy;
-    double dx2i = 1.0 / m_dx / m_dx;
-    double dy2i = 1.0 / m_dy / m_dy;
 
-    for (int i = 1; i < m_localHeight + 1; ++i) {
-        v[IDX(i, 0)] = 2.0 * dx2i * (s[IDX(i, 0)] - s[IDX(i, 1)]);
-        v[IDX(i, m_width - 1)] = 2.0 * dx2i * (s[IDX(i, m_width-1)] - s[IDX(i, m_width-2)]);
+    for (int i = 1; i < m_localHeightPlusOne; ++i) {
+        v[IDX(i, 0)] = m_2dx2i * (s[IDX(i, 0)] - s[IDX(i, 1)]);
+        v[IDX(i, m_widthMinusOne)] = m_2dx2i * (s[IDX(i, m_widthMinusOne)] - s[IDX(i, m_widthMinusOne-1)]);
     }
 
     if (m_rank == 0) {
-        for (int j = 1; j < m_width - 1; ++j) {
-            v[IDX(0, j)] = 2.0 * dy2i * (s[IDX(0, j)] - s[IDX(1, j)]);
+        for (int j = 1; j < m_widthMinusOne; ++j) {
+            v[IDX(0, j)] = m_2dy2i * (s[IDX(0, j)] - s[IDX(1, j)]);
         }
     }
 
     if (m_rank == m_size - 1) {
-        for (int j = 1; j < m_width - 1; ++j) {
-            // if (m_k == 0) {
-            //     std::cout << 2.0 * dy2i * (s[IDX(i, m_width + 1)] - s[IDX(i, m_width)]) - 2.0 * dyi * m_U << std::endl;
-            // }
-            v[IDX(m_localHeight + 1, j)] = 2.0 * dy2i * (s[IDX(m_localHeight + 1, j)] - s[IDX(m_localHeight, j)]) - 2.0 * dyi * m_U;
-            if (m_k == 0) {
-            //     std::cout << 2.0 * dy2i * (s[IDX(i, m_width + 1)] - s[IDX(i, m_width)]) - 2.0 * dyi * m_U << std::endl;
-            // std::cout << v[IDX(i, m_width + 1)] << std::endl;
-            }
+        for (int j = 1; j < m_widthMinusOne; ++j) {
+            v[IDX(m_localHeightPlusOne, j)] = m_2dy2i * (s[IDX(m_localHeightPlusOne, j)] - s[IDX(m_localHeight, j)]) - 2.0 * m_dyi * m_U;
         }
     }
-    // if (m_k == 0) {
-    //     std::cout << v[IDX(1, m_width + 1)] << std::endl;
-    // }
-    // if (m_k == 0) {
-    //     print_matrix_row_major(v, m_Ny, m_Nx);
-    // }
+
     // Compute interior vorticity
-    for (int i = 1; i < m_localHeight + 1; ++i) {
-        for (int j = 1; j < m_width - 1; ++j) {
-            v[IDX(i, j)] = dy2i * (2.0 * s[IDX(i, j)] - s[IDX(i + 1, j)] - s[IDX(i - 1, j)]) 
-            + 1.0 / m_dx / m_dx * (2.0 * s[IDX(i, j)] - s[IDX(i, j + 1)] - s[IDX(i, j - 1)]);
+    for (int i = 1; i < m_localHeightPlusOne; ++i) {
+        for (int j = 1; j < m_widthMinusOne; ++j) {
+            double term1 = 2.0 * s[IDX(i, j)];
+            v[IDX(i, j)] = m_dy2i * (term1 - s[IDX(i + 1, j)] - s[IDX(i - 1, j)]) 
+            + m_dx2i * (term1 - s[IDX(i, j + 1)] - s[IDX(i, j - 1)]);
         }
     }
-    // if (m_k == 0) {
-    //     print_matrix_row_major(v, m_Ny, m_Nx);
-    // }
 }
 
-// void LidDrivenCavity::MPI_TimeAdvance(double *s, double *v, double *v_new)
-// {
-//     // m_s, m_v, m_vtemp
-//     // if (!m_useMPI) {
-//     //     ApplyOperator(in, out);
-//     //     return;
-//     // }
-//     // cblas_dcopy(m_l, m_localArray1, 1, m_localArrayP, 1);
-//     // cblas_dcopy(m_l, m_localArrayX, 1, m_localArrayT, 1);
-//     MPI_Scatterv(s, m_ls, m_disp, MPI_DOUBLE, m_localArray1, m_l, MPI_DOUBLE, 0, m_comm);
-//     MPI_Scatterv(v, m_ls, m_disp, MPI_DOUBLE, m_localArray2, m_l, MPI_DOUBLE, 0, m_comm);
-//     MPI_Scatterv(v_new, m_ls, m_disp, MPI_DOUBLE, m_localArray3, m_l, MPI_DOUBLE, 0, m_comm);
-//     TimeAdvance(m_localArray1, m_localArray2, m_localArray3);
-//     MPI_Allgatherv(&m_localArray3[m_rstart], m_rl, MPI_DOUBLE, v_new, m_rls, m_rdisp, MPI_DOUBLE, m_comm);
-//     return;
-// }
 
 void LidDrivenCavity::TimeAdvance(double *s, double *v, double *v_new)
 {
-    // m_s, m_v, m_vtemp
-    double dxi = 1.0 / m_dx;
-    double dyi = 1.0 / m_dy;
-    double dx2i = 1.0 / m_dx / m_dx;
-    double dy2i = 1.0 / m_dy / m_dy;
+    for (int i = 1; i < m_localHeightPlusOne; ++i) {
+        for (int j = 1; j < m_widthMinusOne; ++j) {
+            double term1 = v[IDX(i+1,j)];
+            double term2 = v[IDX(i,j+1)];
+            double term3 = v[IDX(i,j-1)];
+            double term4 = v[IDX(i-1,j)];
+            double term5 = 2.0*v[IDX(i,j)];
 
-    // int ii {7};
-    // int jj {1};
-    // int test = v[IDX(ii,jj)] + m_dt*(
-    //             ( (s[IDX(ii,jj+1)] - s[IDX(ii,jj-1)]) * 0.5 * dxi
-    //              *(v[IDX(ii+1,jj)] - v[IDX(ii-1,jj)]) * 0.5 * dyi)
-    //           - ( (s[IDX(ii+1,jj)] - s[IDX(ii-1,jj)]) * 0.5 * dyi
-    //              *(v[IDX(ii,jj+1)] - v[IDX(ii,jj-1)]) * 0.5 * dxi)
-    //           + m_nu * (v[IDX(ii,jj+1)] - 2.0 * v[IDX(ii,jj)] + v[IDX(ii,jj-1)])*dx2i
-    //           + m_nu * (v[IDX(ii+1,jj)] - 2.0 * v[IDX(ii,jj)] + v[IDX(ii-1,jj)])*dy2i);
+            // Calculate the gradients.
+            double grad_x_s = (s[IDX(i,j+1)] - s[IDX(i,j-1)]) * 0.5 * m_dxi;
+            double grad_y_s = (s[IDX(i+1,j)] - s[IDX(i-1,j)]) * 0.5 * m_dyi;
+            double grad_y_v = (term1 - term4) * 0.5 * m_dyi;
+            double grad_x_v = (term2 - term3) * 0.5 * m_dxi;
 
-    // if (m_k == 0) {
-    //     std::cout << m_localHeight << std::endl;
-    //     std::cout << m_width << std::endl;
-    //     std::cout << dxi << std::endl;
-    //     std::cout << dyi << std::endl;
-    //     std::cout << dx2i << std::endl;
-    //     std::cout << dy2i << std::endl;
-    //     std::cout << m_nu << std::endl;
+            // Calculate the advection terms.
+            double advection_x = grad_x_s * grad_y_v;
+            double advection_y = grad_y_s * grad_x_v;
 
-    // }
-    for (int i = 1; i < m_localHeight + 1; ++i) {
-        for (int j = 1; j < m_width - 1; ++j) {
-            v_new[IDX(i, j)] = v[IDX(i,j)] + m_dt*(
-                ( (s[IDX(i,j+1)] - s[IDX(i,j-1)]) * 0.5 * dxi
-                 *(v[IDX(i+1,j)] - v[IDX(i-1,j)]) * 0.5 * dyi)
-              - ( (s[IDX(i+1,j)] - s[IDX(i-1,j)]) * 0.5 * dyi
-                 *(v[IDX(i,j+1)] - v[IDX(i,j-1)]) * 0.5 * dxi)
-              + m_nu * (v[IDX(i,j+1)] - 2.0 * v[IDX(i,j)] + v[IDX(i,j-1)])*dx2i
-              + m_nu * (v[IDX(i+1,j)] - 2.0 * v[IDX(i,j)] + v[IDX(i-1,j)])*dy2i);
+            // Calculate the diffusion terms.
+            double diffusion_x = m_nu * (term2 - term5 + term3)*m_dx2i;
+            double diffusion_y = m_nu * (term1 - term5 + term4)*m_dy2i;
+
+            // Combine all terms to get the final result.
+            v_new[IDX(i, j)] = term5/2. + m_dt * (advection_x - advection_y + diffusion_x + diffusion_y);
         }
     }
 }
@@ -450,12 +301,14 @@ LidDrivenCavity::GetVorticity()
     return m_vnew;
 }
 
+
 const double *const
 LidDrivenCavity::GetStreamFunction()
     const
 {
     return m_s;
 }
+
 
 const double
 LidDrivenCavity::GetNx()
@@ -464,12 +317,14 @@ LidDrivenCavity::GetNx()
     return m_Nx;
 }
 
+
 const double
 LidDrivenCavity::GetNy()
     const
 {
     return m_Ny;
 }
+
 
 void LidDrivenCavity::SetSize()
 {
@@ -526,7 +381,7 @@ void LidDrivenCavity::SetSize()
     m_length = m_lengths[m_rank];
     m_returnLength = m_returnLengths[m_rank];
 
-    m_localArray1 = new double[m_length](); // Local block of first vector
+    m_localArray1 = new double[m_length]();
     m_localArray2 = new double[m_length]();
     m_localArray3 = new double[m_length]();
     m_localArray4 = new double[m_length]();
@@ -544,4 +399,7 @@ void LidDrivenCavity::SetSize()
     } else {
         m_returnStart = m_width;
     }
+
+    m_localHeightPlusOne = m_localHeight + 1;
+    m_widthMinusOne = m_width - 1;
 }

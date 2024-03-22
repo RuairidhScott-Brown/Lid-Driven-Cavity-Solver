@@ -5,3 +5,5 @@ ic.txt
 doc/*
 bin/*
 notes/*
+gmon.out
+profiler.txt

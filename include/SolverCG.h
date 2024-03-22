@@ -30,6 +30,25 @@ private:
     int m_length {};
     int m_returnLength {};
 
+    int m_localHeightPlusOne {};
+    int m_widthMinusOne {};
+
+    double m_dx2i {};
+    double m_dy2i {};
+    double m_factor {};
+    int m_k {};
+    double m_alpha {};
+    double m_beta {};
+    double m_eps {};
+    double m_tol {0.001*0.001};
+    double m_localDotProductAplha {};
+    double m_localDotProductBeta {};
+    double m_globalDotProductEps {};
+    double m_localDotProductEps {};
+    double m_localDotProductTemp {};
+    double m_globalDotProductTemp {};
+
+
 
     double* m_localArrayP {}; // Local block of first vector
     double* m_localArrayT {};
@@ -45,7 +64,6 @@ private:
 
     MPI_Comm m_solver_comm {};
 
-    int m_k {};
     int m_height {};
     int m_width {};
     int* m_localHeights {};

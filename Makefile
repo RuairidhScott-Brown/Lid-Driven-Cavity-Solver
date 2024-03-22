@@ -3,8 +3,8 @@ CXX := mpicxx
 CC := mpicxx
 
 # Compiler flags
-CXXFLAGS := -std=c++11 -Wall -pedantic
-TEST_CXXFLAGS := -std=c++11 -Wall
+CXXFLAGS := -std=c++11 -Wall -pedantic -fopenmp -O3
+TEST_CXXFLAGS := -std=c++11 -Wall -fopenmp -O3
 
 # Directories
 SRC_DIR := src

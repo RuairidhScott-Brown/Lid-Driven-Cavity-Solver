@@ -62,11 +62,21 @@ private:
     double m_nu     {0.1};
     int m_k {};
 
+    double m_dxi {};
+    double m_dyi {};
+    double m_dx2i {};
+    double m_dy2i {};
+    double m_2dx2i {};
+    double m_2dy2i {};
+
     int m_rankRow    {};
     int m_rankCol    {};
     int m_rank       {};
     int m_size       {};
     int m_sizeX      {};
+
+    int m_localHeightPlusOne {};
+    int m_widthMinusOne {};
 
     int* m_localHeights {};
     int* m_lengths {};

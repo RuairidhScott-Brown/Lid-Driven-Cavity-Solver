@@ -10,7 +10,7 @@
 #include <iomanip>
 #include <mpi.h>
 
-#define IDX(I,J) ((J)*Nx + (I))
+#define IDX(I,J) ((I)*Nx + (J))
 
 #include "../include/SolverCG.h"
 #include "../include/LidDrivenCavity.h"
@@ -97,14 +97,14 @@ AllValuesAreZero(const double* arr, const size_t size)
 }
 
 bool 
-ArraysAreEqual(const double* arr1, const double* arr2, const size_t size) 
+ArraysAreEqual(const double* arr1, const double* arr2, const size_t size, double tol = 0.0001) 
 {
     for(size_t i {}; i < size; ++i) {
         // if(std::abs(RoundSigFig(arr1[i] + offset, sig) - RoundSigFig(arr2[i] + offset, sig)) > 1.0e-6) {
         //     std::cout << "Error :" << std::setprecision(10) << arr1[i] << " " <<  arr2[i] << std::endl;
         //     return false;
         // }
-        BOOST_TEST(arr1[i] == arr2[i], tt::tolerance(0.0001));
+        BOOST_TEST(arr1[i] == arr2[i], tt::tolerance(tol));
     }
     return true;
 }
@@ -141,39 +141,44 @@ ReadDefaultDataFromFile(const std::string& filename, DefaultLidDrivenCavityData*
     }
 }
 
+
 BOOST_AUTO_TEST_CASE(TestSolverCG){
 
     DefaultLidDrivenCavity dldc {};
+    dldc.Nx = 101;
+    dldc.Ny = 101;
+    dldc.dx = 1./100.;
+    dldc.dy = 1./100.;
 
     SolverCG solver(dldc.Nx, dldc.Ny, dldc.dx, dldc.dy);
     solver.UseMPI(false);
 
     int n {dldc.Nx*dldc.Ny};
     int Nx {dldc.Nx};
-    double b[n] {};
     double x[n] {};
-    double expected_x[n] {};
+    double vorticity[n] {};
+    double streamFunction[n] {};
 
     const int k = 3;
     const int l = 3;
 
-    for (int i {}; i < dldc.Nx; ++i) {
-        for (int j {}; j < dldc.Ny; ++j) {
-            expected_x[IDX(i, j)] = -M_PI*M_PI*(k*k + l*l)*sin(M_PI*k*i*dldc.dx)*sin(M_PI*l*j*dldc.dy);
+    for (int j {}; j < dldc.Nx; ++j) {
+        for (int i {}; i < dldc.Ny; ++i) {
+            vorticity[IDX(i, j)] = -M_PI*M_PI*(k*k + l*l)*sin(M_PI*k*i*dldc.dx)*sin(M_PI*l*j*dldc.dy);
         }
     }
 
-    for (int i {1}; i < Nx-1; ++i) {
-        for (int j {1}; j < dldc.Ny-1; ++j) {
-            b[IDX(i, j)] = -1.0*((expected_x[IDX(i-1, j)] - 2.0*expected_x[IDX(i, j)] + expected_x[IDX(i+1, j)]) / (dldc.dx*dldc.dx)
-                        + (expected_x[IDX(i, j-1)] - 2.0*expected_x[IDX(i, j)] + expected_x[IDX(i, j+1)]) / (dldc.dy*dldc.dy));
+    for (int j {}; j < dldc.Nx; ++j) {
+        for (int i {}; i < dldc.Ny; ++i) {
+            streamFunction[IDX(i, j)] = -sin(M_PI*k*i*dldc.dx)*sin(M_PI*l*j*dldc.dy);
         }
     }
 
-    solver.Solve(b, x);
+    solver.Solve(vorticity, x);
 
-    BOOST_TEST(ArraysAreEqual(x, expected_x, n) == true);
+    BOOST_TEST(ArraysAreEqual(x, streamFunction, n, 0.01) == true);
 }
+
 
 BOOST_AUTO_TEST_CASE(TestSolverCGConverFailed)
 {
