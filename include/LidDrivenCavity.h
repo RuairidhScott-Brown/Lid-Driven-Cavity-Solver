@@ -4,6 +4,12 @@
 #include <mpi.h>
 using namespace std;
 
+enum class LidDrivenCavityConfigError {
+    SUCCESS,
+    FAILED
+};
+
+
 class SolverCG;
 
 class LidDrivenCavity
@@ -21,7 +27,9 @@ public:
     void Initialise();
     void Integrate();
     void WriteSolution(std::string file);
-    void PrintConfiguration();
+    LidDrivenCavityConfigError PrintConfiguration();
+    LidDrivenCavityConfigError CheckConfiguration();
+
 
     void ConvertStreamFunctionToVelocityU(double* const u);
     void ConvertStreamFunctionToVelocityV(double* const v);

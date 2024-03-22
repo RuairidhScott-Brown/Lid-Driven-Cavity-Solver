@@ -7,3 +7,4 @@ bin/*
 notes/*
 gmon.out
 profiler.txt
+.vscode

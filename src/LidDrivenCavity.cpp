@@ -222,8 +222,10 @@ void LidDrivenCavity::WriteSolution(std::string file)
  * Reynolds number. This should be printed at the start of the computation as
  * it contains a check to make sure the time-step restriction is satisfied.
  * 
+ * @return LidDrivenCavityConfigError 
  */
-void LidDrivenCavity::PrintConfiguration()
+LidDrivenCavityConfigError 
+LidDrivenCavity::PrintConfiguration()
 {
     cout << "Grid size: " << m_Nx << " x " << m_Ny << endl;
     cout << "Spacing:   " << m_dx << " x " << m_dy << endl;
@@ -235,11 +237,24 @@ void LidDrivenCavity::PrintConfiguration()
     cout << "Linear solver: preconditioned conjugate gradient" << endl;
     cout << "Size:      " << m_size << endl;
     cout << endl;
-    if (m_nu * m_dt / m_dx / m_dy > 0.25)
-    {
+    return CheckConfiguration();
+}
+
+
+/**
+ * @brief Checks that the time-step restriction is satisfied.
+ * 
+ * @return LidDrivenCavityConfigError 
+ */
+LidDrivenCavityConfigError 
+LidDrivenCavity::CheckConfiguration() 
+{
+    if (m_nu * m_dt / m_dx / m_dy > 0.25) {
         cout << "ERROR: Time-step restriction not satisfied!" << endl;
         cout << "Maximum time-step is " << 0.25 * m_dx * m_dy / m_nu << endl;
-        exit(-1);
+        return LidDrivenCavityConfigError::FAILED;
+    } else {
+        return LidDrivenCavityConfigError::SUCCESS;
     }
 }
 

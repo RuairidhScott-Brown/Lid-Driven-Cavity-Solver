@@ -17,8 +17,6 @@ public:
 
     void UseMPI(bool yes);
 
-    // void SetCommunicator();
-
     SolverCGErrorCode Solve(double* b, double* x);
 
 private:

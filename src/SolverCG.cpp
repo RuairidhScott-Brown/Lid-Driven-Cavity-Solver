@@ -133,7 +133,7 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
         }
         m_localArrayX = nullptr;
         m_localArrayB = nullptr;
-        return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
+        return SolverCGErrorCode::SUCCESS;
     }
 
     Laplace(m_localArrayX, m_localArrayT);
@@ -142,9 +142,7 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
     MPI_Sendrecv(&m_localArrayT[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArrayT[m_width*(m_localHeight+1)], m_width, MPI_DOUBLE, m_right, 0, m_solver_comm, MPI_STATUS_IGNORE);
     MPI_Sendrecv(&m_localArrayT[m_localHeight*m_width], m_width, MPI_DOUBLE, m_right, 0, m_localArrayT, m_width, MPI_DOUBLE, m_left, 0, m_solver_comm, MPI_STATUS_IGNORE);
     
-
-    cblas_dcopy(m_length, m_localArrayB, 1, m_localArrayR, 1);
-    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_length, 0, m_localBC, 1, m_localArrayR, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localBC, 1, m_localArrayB, 1, 0.0, m_localArrayR, 1);
 
     cblas_daxpy(m_length, -1.0, m_localArrayT, 1, m_localArrayR, 1);
     cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
@@ -256,8 +254,7 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     
     Laplace(x, m_localArrayT);
 
-    cblas_dcopy(m_length, b, 1, m_localArrayR, 1);
-    cblas_dtbmv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, m_length, 0, m_localBC, 1, m_localArrayR, 1);
+    cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localBC, 1, m_localArrayB, 1, 0.0, m_localArrayR, 1);
 
     cblas_daxpy(m_length, -1.0, m_localArrayT, 1, m_localArrayR, 1);
     cblas_dsbmv(CblasRowMajor, CblasUpper, m_length, 0, 1.0, m_localPre, 1, m_localArrayR, 1, 0.0, m_localArrayZ, 1);
@@ -418,7 +415,7 @@ void SolverCG::Laplace(double* in, double* out) {
     int i;
     int j;
     # pragma omp parallel for shared(m_localArrayP, m_localArrayT, m_dx2i, m_dy2i, m_localHeightPlusOne, m_widthMinusOne) private(i,j)
-    for (int i = 1; i <m_localHeightPlusOne; ++i) {
+    for (int i = 1; i < m_localHeightPlusOne; ++i) {
         for (int j = 1; j < m_widthMinusOne; ++j) {
             double term1 = 2.0 * in[IDX(i, j)];
             double term2 = (-in[IDX(i, j - 1)] + term1 - in[IDX(i, j + 1)]) * m_dx2i;
