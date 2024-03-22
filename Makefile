@@ -42,14 +42,17 @@ default: $(EXEC)
 
 # Compile main program
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -o $@ -c $<
 
 # Compile unit test files
 $(BUILD_DIR)/%.o: $(TESTS_DIR)/%.cpp
+	mkdir -p $(BUILD_DIR)
 	$(CXX) $(TEST_CXXFLAGS) -I$(INCLUDE_DIR) -o $@ -c $<
 
 # Build main executable
 $(EXEC): $(OBJS)
+	mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS)
 
 # Build unit test executable
@@ -64,7 +67,8 @@ clean:
 	-rm -rf $(DOC_DIR)/*
 
 # Generate documentation
-doc:
+docs:
+	mkdir -p $(DOC_DIR)
 	doxygen $(DOXYFILE)
 
 # PHONY targets
