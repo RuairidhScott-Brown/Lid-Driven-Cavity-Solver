@@ -174,10 +174,10 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
             # pragma omp sections nowait
             {
                 #pragma omp section
-                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
+                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1); // x_{k+1} = x_k + alpha_k p_k
 
                 #pragma omp section
-                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1); // r_{k+1} = r_k - alpha_k A p_k
             }
         }
 
@@ -284,10 +284,10 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
             # pragma omp sections nowait
             {
                 #pragma omp section
-                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1);
+                cblas_daxpy(m_length, m_alpha, m_localArrayP, 1, m_localArrayX, 1); // x_{k+1} = x_k + alpha_k p_k
 
                 #pragma omp section
-                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1);
+                cblas_daxpy(m_length, -m_alpha, m_localArrayT, 1, m_localArrayR, 1); // r_{k+1} = r_k - alpha_k A p_k
             }
         }
 
@@ -414,7 +414,7 @@ void SolverCG::SetSize()
 void SolverCG::Laplace(double* in, double* out) {
     int i;
     int j;
-    # pragma omp parallel for shared(m_localArrayP, m_localArrayT, m_dx2i, m_dy2i, m_localHeightPlusOne, m_widthMinusOne) private(i,j)
+    # pragma omp parallel for shared(in, out, m_dx2i, m_dy2i, m_localHeightPlusOne, m_widthMinusOne) private(i,j)
     for (int i = 1; i < m_localHeightPlusOne; ++i) {
         for (int j = 1; j < m_widthMinusOne; ++j) {
             double term1 = 2.0 * in[IDX(i, j)];
@@ -442,8 +442,6 @@ void SolverCG::CreateMatrices()
 
     m_localPre = new double[m_length]();
     m_localBC = new double[m_length]();
-
-    // Populate
 
     // Populate the pre-condition matrix multiplier.
     for (int i {}; i < m_localHeight+2; ++i) {

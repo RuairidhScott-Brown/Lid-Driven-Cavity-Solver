@@ -136,8 +136,8 @@ void LidDrivenCavity::Integrate()
                     << std::endl;
         }
         Advance();
-        m_k++;
     }
+    // Gather the results for vorticity and the stream function into there respective matrices.
     MPI_Allgatherv(&m_localArray3[m_returnStart], m_returnLength, MPI_DOUBLE, m_vnew, m_returnLengths, m_returnDisplacements, MPI_DOUBLE, m_comm);
     MPI_Allgatherv(&m_localArray1[m_returnStart], m_returnLength, MPI_DOUBLE, m_s, m_returnLengths, m_returnDisplacements, MPI_DOUBLE, m_comm);
 }

@@ -25,10 +25,16 @@ public:
     SolverCGErrorCode Solve(double* b, double* x);
 
 private:
+    // Constants needed for the equations.
     double m_dx     {};
     double m_dy     {};
     int m_Nx        {};
     int m_Ny        {};
+    double m_dx2i {};
+    double m_dy2i {};
+    double m_factor {};
+
+    // Dimensions of the local matrix.
     int m_localHeight {};
     int m_length {};
     int m_returnLength {};
@@ -36,14 +42,13 @@ private:
     int m_localHeightPlusOne {};
     int m_widthMinusOne {};
 
-    double m_dx2i {};
-    double m_dy2i {};
-    double m_factor {};
     int m_k {};
     double m_alpha {};
     double m_beta {};
     double m_eps {};
     double m_tol {0.001*0.001};
+
+    // Required for MPI reduce.
     double m_localDotProductAplha {};
     double m_localDotProductBeta {};
     double m_globalDotProductEps {};
@@ -52,8 +57,8 @@ private:
     double m_globalDotProductTemp {};
 
 
-
-    double* m_localArrayP {}; // Local block of first vector
+    // Temporary arrays.
+    double* m_localArrayP {}; 
     double* m_localArrayT {};
     double* m_localArrayX {};
     double* m_localArrayR {};
@@ -61,11 +66,11 @@ private:
     double* m_localArrayB {};
     double* m_localPre {};
     double* m_localBC {};
-    double* m_localL {};
     int* m_displacements {};
     int m_solver_rank {-1}; 
     int m_solver_size {-1};
 
+    // Communicators.
     MPI_Comm m_solver_comm {};
 
     int m_height {};
@@ -81,23 +86,11 @@ private:
     int m_returnStart {};
 
 
-    void ApplyOperator(double* p, double* t);
-    void Precondition(double* p, double* t);
-    void ImposeBC(double* p);
-    double MPI_cblas_ddot(const int m, const double* const x, const double* const y);
-    double MPI_cblas_dnrm2(const int m, const double* const x);
-    void MPI_cblas_daxpy(const int m, const double alpha, double* const x,  double* const y);
-    void MPI_cblas_dcopy(const int m, double* const x, double* const y);
-    void PopulatePreconditionBandedMatrix();
-    void PopulateImposeBCBandedMatrix();
-    void MPI_Precondition(double* in, double* out);
     void CreateMatrices();
-    void MPI_ImposeBC(double* out);
-    void MPI_ApplyOperator(double* in, double* out);
     void Laplace(double* in, double* out);
-    SolverCGErrorCode SolveWithMultipleRank(double* b, double* x);
-    SolverCGErrorCode SolveWithSingleRank(double* b, double* x);
     void SetSize();
 
+    SolverCGErrorCode SolveWithMultipleRank(double* b, double* x);
+    SolverCGErrorCode SolveWithSingleRank(double* b, double* x);
 };
 

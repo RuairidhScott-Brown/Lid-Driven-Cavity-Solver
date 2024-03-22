@@ -59,14 +59,7 @@ private:
     double m_dy     {};
     int    m_Nx     {9};
     int    m_Ny     {9};
-    int    m_lNx    {};
-    int    m_lNy    {};
-    int    m_lrNx    {};
-    int    m_lrNy    {};
-    int    m_startNx {};
-    int    m_startNy {};
-    int    m_endNx  {};
-    int    m_endNy  {};
+ 
     int    m_Npts   {81};
     double m_Lx     {1.0};
     double m_Ly     {1.0};
@@ -91,6 +84,7 @@ private:
     int m_localHeightPlusOne {};
     int m_widthMinusOne {};
 
+    // Dimensions of the local matrix
     int* m_localHeights {};
     int* m_lengths {};
     int* m_returnLengths {};
@@ -103,7 +97,9 @@ private:
     int m_localHeight {};
     int m_length {};
     int m_returnLength {};
-    double* m_localArray1 {}; // Local block of first vector
+
+    // Temporary data arrays.
+    double* m_localArray1 {};
     double* m_localArray2 {};
     double* m_localArray3 {};
     double* m_localArray4 {};
@@ -119,9 +115,7 @@ private:
     void UpdateDxDy();
     void Advance();
     void SetSize();
-    void MPI_TimeAdvance(double* s, double* v, double* v_new);
     void TimeAdvance(double* s, double* v, double* v_new);
-    void MPI_V(double* s, double* v);
     void Vorticity(double* s, double* v);
 };
 
