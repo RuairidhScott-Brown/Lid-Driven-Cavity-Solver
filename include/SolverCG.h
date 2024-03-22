@@ -61,6 +61,7 @@ private:
     double* m_localArrayB {};
     double* m_localPre {};
     double* m_localBC {};
+    double* m_localL {};
     int* m_displacements {};
     int m_solver_rank {-1}; 
     int m_solver_size {-1};
