@@ -109,6 +109,6 @@ private:
     void MPI_TimeAdvance(double* s, double* v, double* v_new);
     void TimeAdvance(double* s, double* v, double* v_new);
     void MPI_V(double* s, double* v);
-    void V(double* s, double* v);
+    void Vorticity(double* s, double* v);
 };
 

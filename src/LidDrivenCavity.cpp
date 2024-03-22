@@ -8,25 +8,40 @@ using namespace std;
 #include <cblas.h>
 #include <mpi.h>
 
-// #define IDX(I, J) ((J)*m_Ny + (I))
 #define IDX(I,J) ((I)*m_Nx + (J))
 
 #include "../include/LidDrivenCavity.h"
 #include "../include/SolverCG.h"
 
 
+/**
+ * @brief Construct a new Lid Driven Cavity::LidDrivenCavity object.
+ * 
+ * @param    comm                MPI communicator to use.
+ */
 LidDrivenCavity::LidDrivenCavity(MPI_Comm comm)
 {
     m_comm = comm;
 }
 
 
+/**
+ * @brief Destroy the Lid Driven Cavity::LidDrivenCavity object and
+ * deletes the dynamically allocated arrays.
+ * 
+ */
 LidDrivenCavity::~LidDrivenCavity()
 {
     CleanUp();
 }
 
 
+/**
+ * @brief Set the domain size of the solver.
+ * 
+ * @param    xlen                Length in x.
+ * @param    ylen                Length in y.
+ */
 void LidDrivenCavity::SetDomainSize(double xlen, double ylen)
 {
     m_Lx = xlen;
@@ -35,6 +50,12 @@ void LidDrivenCavity::SetDomainSize(double xlen, double ylen)
 }
 
 
+/**
+ * @brief Set the grid size for the solver domain.
+ * 
+ * @param    nx                  Number of poinst in x-direction.
+ * @param    ny                  Number of points in the y-direction.
+ */
 void LidDrivenCavity::SetGridSize(int nx, int ny)
 {
     m_Nx = nx;
@@ -43,18 +64,33 @@ void LidDrivenCavity::SetGridSize(int nx, int ny)
 }
 
 
+/**
+ * @brief Set the time step.
+ * 
+ * @param    deltat              Time step.
+ */
 void LidDrivenCavity::SetTimeStep(double deltat)
 {
     m_dt = deltat;
 }
 
 
+/**
+ * @brief Set the final time.
+ * 
+ * @param    finalt              Final time.
+ */
 void LidDrivenCavity::SetFinalTime(double finalt)
 {
     m_T = finalt;
 }
 
 
+/**
+ * @brief Set the Reynolds number.
+ * 
+ * @param    re                  My Param doc
+ */
 void LidDrivenCavity::SetReynoldsNumber(double re)
 {
     m_Re = re;
@@ -62,6 +98,12 @@ void LidDrivenCavity::SetReynoldsNumber(double re)
 }
 
 
+/**
+ * @brief Initialise the lid driven cavity solver by 
+ * defining all the variables needed based off of the configuration
+ * given to the object.
+ * 
+ */
 void LidDrivenCavity::Initialise()
 {
     CleanUp();
@@ -78,15 +120,20 @@ void LidDrivenCavity::Initialise()
 }
 
 
+/**
+ * @brief Performs the integration needed to fine the vorticity and
+ * stream function at the end time specificed by T.
+ * 
+ */
 void LidDrivenCavity::Integrate()
 {
     int NSteps = ceil(m_T / m_dt);
 
     for (int t = 0; t < NSteps; ++t) {
         if (m_rank == 0) {
-            // std::cout << "Step: " << setw(8) << t
-            //         << "  Time: " << setw(8) << t*m_dt
-            //         << std::endl;
+            std::cout << "Step: " << setw(8) << t
+                    << "  Time: " << setw(8) << t*m_dt
+                    << std::endl;
         }
         Advance();
         m_k++;
@@ -96,6 +143,11 @@ void LidDrivenCavity::Integrate()
 }
 
 
+/**
+ * @brief Conver the stream function to the U velocity component.
+ * 
+ * @param    u                   My Param doc
+ */
 void LidDrivenCavity::ConvertStreamFunctionToVelocityU(double *const u)
 {
     for (int j = 1; j < m_Nx - 1; ++j) {
@@ -109,6 +161,11 @@ void LidDrivenCavity::ConvertStreamFunctionToVelocityU(double *const u)
 }
 
 
+/**
+ * @brief Convert the stream function to V velocity component.
+ * 
+ * @param    v                   V velocity component.
+ */
 void LidDrivenCavity::ConvertStreamFunctionToVelocityV(double *const v)
 {
     for (int j = 1; j < m_Nx - 1; ++j) {
@@ -119,6 +176,13 @@ void LidDrivenCavity::ConvertStreamFunctionToVelocityV(double *const v)
 }
 
 
+/**
+ * @brief Write the vorticity, stream function, U velocity componenet
+ * and the V velocity componenet to a file. The files is saved in the
+ * local directory.
+ * 
+ * @param    file                File name.
+ */
 void LidDrivenCavity::WriteSolution(std::string file)
 {
     std::cout << std::fixed << std::setprecision(6);
@@ -152,6 +216,13 @@ void LidDrivenCavity::WriteSolution(std::string file)
 }
 
 
+/**
+ * @brief Prints the current configuration of the lid driven cavity solver. This
+ * includes the grid size and constants assocaited with the problem such as the
+ * Reynolds number. This should be printed at the start of the computation as
+ * it contains a check to make sure the time-step restriction is satisfied.
+ * 
+ */
 void LidDrivenCavity::PrintConfiguration()
 {
     cout << "Grid size: " << m_Nx << " x " << m_Ny << endl;
@@ -173,6 +244,11 @@ void LidDrivenCavity::PrintConfiguration()
 }
 
 
+/**
+ * @brief Clean up all the dynamically assigned variables. Should
+ * be called before being LidDrivenCavity object is destroyed.
+ * 
+ */
 void LidDrivenCavity::CleanUp()
 {
     if (m_v) {
@@ -197,6 +273,10 @@ void LidDrivenCavity::CleanUp()
 }
 
 
+/**
+ * @brief Update the terms associated with ∆x and ∆y.
+ * 
+ */
 void LidDrivenCavity::UpdateDxDy()
 {
     m_dx = m_Lx / (m_Nx - 1);
@@ -211,10 +291,15 @@ void LidDrivenCavity::UpdateDxDy()
 }
 
 
+/**
+ * @brief Performs the time advacements step for the lid driven cavity
+ * problem.
+ * 
+ */
 void LidDrivenCavity::Advance()
 {
 
-    V(m_localArray1, m_localArray2);
+    Vorticity(m_localArray1, m_localArray2);
 
     if (m_size > 1) {
         MPI_Sendrecv(&m_localArray2[m_width], m_width, MPI_DOUBLE, m_left, 0, &m_localArray2[m_width * (m_localHeight + 1)], m_width, MPI_DOUBLE, m_right, 0, m_comm, MPI_STATUS_IGNORE);
@@ -232,7 +317,13 @@ void LidDrivenCavity::Advance()
 }
 
 
-void LidDrivenCavity::V(double *s, double *v)
+/**
+ * @brief  Calculates vorticity boundary and interior conditions at time t:
+ * 
+ * @param    s                   Stream function matrix.
+ * @param    v                   Vorticity matrix.
+ */
+void LidDrivenCavity::Vorticity(double *s, double *v)
 {
     int i;
     int j;
@@ -277,6 +368,13 @@ void LidDrivenCavity::V(double *s, double *v)
 }
 
 
+/**
+ * @brief Calculates the interior vorticity at time t + ∆t:
+ * 
+ * @param    s                   Stream function matrix.
+ * @param    v                   Vorticity matrix.
+ * @param    v_new               New vorticiy matrix.
+ */
 void LidDrivenCavity::TimeAdvance(double *s, double *v, double *v_new)
 {
     int i;
@@ -311,6 +409,11 @@ void LidDrivenCavity::TimeAdvance(double *s, double *v, double *v_new)
 }
 
 
+/**
+ * @brief Getter for the pointer to the vorticity data.
+ * 
+ * @return   const double* const Vorticity matrix.
+ */
 const double *const
 LidDrivenCavity::GetVorticity()
     const
@@ -319,6 +422,11 @@ LidDrivenCavity::GetVorticity()
 }
 
 
+/**
+ * @brief Getter for the pointer to stream function data.
+ * 
+ * @return   const double* const Stream function matrix.
+ */
 const double *const
 LidDrivenCavity::GetStreamFunction()
     const
@@ -327,6 +435,11 @@ LidDrivenCavity::GetStreamFunction()
 }
 
 
+/**
+ * @brief Getter for Nx.
+ * 
+ * @return   const double        Ny
+ */
 const double
 LidDrivenCavity::GetNx()
     const
@@ -335,6 +448,11 @@ LidDrivenCavity::GetNx()
 }
 
 
+/**
+ * @brief Getter for Ny.
+ * 
+ * @return   const double        Ny.
+ */
 const double
 LidDrivenCavity::GetNy()
     const
@@ -343,6 +461,13 @@ LidDrivenCavity::GetNy()
 }
 
 
+/**
+ * @brief Calculates all the necessary lengths, dimensions
+ * and displacements needed so that the lid driven cavity
+ * matrix can be separated into local matrices
+ * which communicate with eachother using MPI.
+ * 
+ */
 void LidDrivenCavity::SetSize()
 {
     m_height = m_Ny;

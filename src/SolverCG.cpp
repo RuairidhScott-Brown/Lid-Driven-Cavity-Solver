@@ -12,7 +12,15 @@ using namespace std;
 
 #define IDX(I,J) ((I)*m_Nx + (J))
 
-
+/**
+ * @brief Construct a new SolverCG:SolverCG object.
+ * 
+ * @param    pNx                 Number of grid points in x-direction.
+ * @param    pNy                 Number of grid points in y-direction.
+ * @param    pdx                 Delta x.
+ * @param    pdy                 Delta y.
+ * @param    comm                MPI communicator.
+ */
 SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
 {
     m_dx = pdx;
@@ -33,6 +41,14 @@ SolverCG::SolverCG(int pNx, int pNy, double pdx, double pdy, MPI_Comm comm)
 }
 
 
+/**
+ * @brief Sets the member variabes assocaited with indicating
+ * the number of ranks available to the solver.
+ * 
+ * @param    yes                Flag to indicate if MPI should 
+ *                              be utilised or not. Default is
+ *                              true.
+ */
 void SolverCG::UseMPI(bool yes) {
     if (yes) {
         MPI_Comm_rank(m_solver_comm, &m_solver_rank);
@@ -46,6 +62,11 @@ void SolverCG::UseMPI(bool yes) {
 }
 
 
+/**
+ * @brief Destroy the SolverCG::SolverCG object and cleans
+ * up dynamically assigned memeory.
+ * 
+ */
 SolverCG::~SolverCG()
 {
     delete[] m_localArrayP;
@@ -64,6 +85,14 @@ SolverCG::~SolverCG()
 }
 
 
+/**
+ * @brief Switch to direct the incoming data to an appropriate solver
+ * depending on the number of processes active.
+ * 
+ * @param    b                   Matrix.
+ * @param    x                   Matrix.
+ * @return   SolverCGErrorCode   Enum class indicating the success of the solver.
+ */
 SolverCGErrorCode 
 SolverCG::Solve(double* b, double* x) 
 {
@@ -75,6 +104,15 @@ SolverCG::Solve(double* b, double* x)
 }
 
 
+/**
+ * @brief Main solver for the Poissions problem that utilises an interative scheme.
+ * This function assumes that there is multiple MPI process runnning and as such
+ * performs communication with the other ranks.
+ * 
+ * @param    b                   Matrix.
+ * @param    x                   Matrix.
+ * @return   SolverCGErrorCode   Enum class indicating the success of the solver.
+ */
 SolverCGErrorCode 
 SolverCG::SolveWithMultipleRank(double* b, double* x) 
 {
@@ -169,6 +207,15 @@ SolverCG::SolveWithMultipleRank(double* b, double* x)
 }
 
 
+/**
+ * @brief Main solver for the Poissions problem that utilises an interative scheme.
+ * This function assumes that there is only one MPI process runnning and as such
+ * does no communication with other ranks.
+ * 
+ * @param    b                   Matrix.
+ * @param    x                   Matrix.
+ * @return   SolverCGErrorCode   Enum class indicating the success of the solver.
+ */
 SolverCGErrorCode 
 SolverCG::SolveWithSingleRank(double* b, double* x)
 {
@@ -186,7 +233,7 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
         }
         m_localArrayX = nullptr;
         m_localArrayB = nullptr;
-        return SolverCGErrorCode::SUCCESS; // maybe another error code for this.
+        return SolverCGErrorCode::SUCCESS;
     }
     
     Laplace(x, m_localArrayT);
@@ -254,13 +301,20 @@ SolverCG::SolveWithSingleRank(double* b, double* x)
     m_localArrayX = nullptr;
     m_localArrayB = nullptr;
 
-    // if (m_solver_rank == 0) {
-    //     std::cout << "Converged in " << m_k << " iterations. eps = " << m_eps << std::endl;
-    // }
+    if (m_solver_rank == 0) {
+        std::cout << "Converged in " << m_k << " iterations. eps = " << m_eps << std::endl;
+    }
     return SolverCGErrorCode::SUCCESS;
 }
 
 
+/**
+ * @brief Calculates all the necessary lengths, dimensions
+ * and displacements needed so that the matrix data given to
+ * SolverCG::Solver() can be separated into local matrices
+ * which communicate with eachother using MPI.
+ * 
+ */
 void SolverCG::SetSize()
 {    
     int smallHeightSize {(m_height-2) / m_solver_size};
@@ -334,8 +388,15 @@ void SolverCG::SetSize()
 }
 
 
+/**
+ * @brief Performs the laplace operation on the input matrix
+ * and puts the results in the output matrix. The input matrix is
+ * unmodified.
+ * 
+ * @param    in                  Input matrix to apply laplace operator.
+ * @param    out                 Output matrix to store the results.
+ */
 void SolverCG::Laplace(double* in, double* out) {
-    // Assume ordered with y-direction fastest (column-by-column)
     int i;
     int j;
     # pragma omp parallel for shared(m_localArrayP, m_localArrayT, m_dx2i, m_dy2i, m_localHeightPlusOne, m_widthMinusOne) private(i,j)
@@ -350,6 +411,11 @@ void SolverCG::Laplace(double* in, double* out) {
 }
 
 
+/**
+ * @brief Creates the matricies needed to perform the pre-condition
+ * and boundary condition steps in the solver.
+ * 
+ */
 void SolverCG::CreateMatrices() 
 {
     if(m_localPre) {
@@ -362,6 +428,7 @@ void SolverCG::CreateMatrices()
     m_localPre = new double[m_length];
     m_localBC = new double[m_length];
 
+    // Populate the pre-condition matrix multiplier.
     for (int i {}; i < m_localHeight+2; ++i) {
         for (int j {}; j < m_width; ++j) {
             if (m_start && i == 0) {
@@ -376,6 +443,7 @@ void SolverCG::CreateMatrices()
         }
     }
 
+    // Populate the boundary condition matrix multiplier.
     for (int i {}; i < m_localHeight+2; ++i) {
         for (int j {}; j < m_width; ++j) {
             if (m_start && i == 0) {
