@@ -12,6 +12,11 @@ enum class LidDrivenCavityConfigError {
 
 class SolverCG;
 
+/**
+ * @brief Object responsible for the
+ * solving of the Lid Driven Cavity problem.
+ * 
+ */
 class LidDrivenCavity
 {
 public:

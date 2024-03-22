@@ -7,6 +7,11 @@ enum class SolverCGErrorCode {
     CONVERGE_FAILED
 };
 
+/**
+ * @brief Object responsible for the solving of the
+ * Poissons problem.
+ * 
+ */
 class SolverCG
 {
 public:
