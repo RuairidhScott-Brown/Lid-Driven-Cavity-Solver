@@ -82,7 +82,6 @@ SolverCG::~SolverCG()
     delete[] m_returnLengths;
     delete[] m_returnDisplacements;
     delete[] m_displacements;
-    delete[] m_localL;
 }
 
 
@@ -440,17 +439,9 @@ void SolverCG::CreateMatrices()
     if(m_localBC) {
         delete[] m_localBC;
     }
-    if(m_localL) {
-        delete[] m_localL;
-    }
 
-    m_localPre = new double[m_length];
-    m_localBC = new double[m_length];
-    m_localL = new double[m_length*5];
-
-    double term1 {-m_dx2i};
-    double term2 {-m_dy2i};
-    double term3 {2.0*(m_dx2i + m_dy2i)};
+    m_localPre = new double[m_length]();
+    m_localBC = new double[m_length]();
 
     // Populate
 
